@@ -107,6 +107,14 @@ export interface TemplateExercise {
   exercise_name?: string;
 }
 
+export interface TemplateSet {
+  id: number;
+  template_exercise_id: number;
+  set_index: number;
+  target_reps: number;
+  target_weight: number;
+}
+
 export interface SeanceType {
   id: number;
   name: string;
