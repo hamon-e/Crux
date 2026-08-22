@@ -17,7 +17,7 @@ import {
 } from '@/db/queries';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
-import { WorkoutHeatmap, type DayInfo } from '@/components/workout-heatmap';
+import { WorkoutHeatmap, HEATMAP_CARD_WIDTH, type DayInfo } from '@/components/workout-heatmap';
 
 type WorkoutRow = Awaited<ReturnType<typeof getWorkouts>>[number];
 type WeekDays = Awaited<ReturnType<typeof getCurrentWeekDailyVolume>>;
@@ -98,7 +98,12 @@ export default function HistoryScreen() {
               }}>
               Volume hebdomadaire
             </Text>
-            <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
+            <View
+              style={[
+                styles.card,
+                styles.weekCard,
+                { backgroundColor: colors.backgroundElement },
+              ]}>
               <View style={styles.chartRow}>
                 {weekDays.map((d) => (
                   <View key={d.iso} style={styles.dayColumn}>
@@ -118,20 +123,6 @@ export default function HistoryScreen() {
                   </View>
                 ))}
               </View>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: 11,
-                  marginTop: 8,
-                  textAlign: 'center',
-                }}>
-                {weekDays.filter((d) => d.trained).length}/{weekDays.length} jours
-                d&apos;entraînement ·{' '}
-                {Math.round(weekDays.reduce((s, d) => s + d.volume, 0)).toLocaleString(
-                  'fr-FR'
-                )}{' '}
-                kg
-              </Text>
             </View>
           </>
         }
@@ -190,6 +181,10 @@ const styles = StyleSheet.create({
   chartRow: {
     flexDirection: 'row',
     gap: 6,
+  },
+  weekCard: {
+    width: HEATMAP_CARD_WIDTH,
+    alignSelf: 'flex-start',
   },
   dayColumn: {
     flex: 1,
