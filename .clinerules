@@ -1,0 +1,27 @@
+# Directives Expo Web Multi-Threads & Captures Visuelles (T3 Code)
+
+### 1. Attribution Dynamique du Port Expo
+Pour éviter les conflits de port entre les différents threads autonomes / worktrees :
+- Génère un port Web unique entre **8081 et 8999** (ex: `8085`).
+- Ne lance JAMAIS Expo sur le port par défaut sans spécifier le port Web.
+
+### 2. Démarrage d'Expo Web
+- Lance le serveur Expo en mode Web et non-interactif en arrière-plan :
+  `npx expo start --web --port <PORT_GÉNÉRÉ> --non-interactive &`
+- Attends que le serveur soit totalement prêt (5 à 10 secondes) avant d'y accéder.
+
+### 3. Inspection Visuelle & Affiche des Screenshots dans le Thread
+- Ouvre l'application via le browser de T3 Code à l'adresse `http://localhost:<PORT_GÉNÉRÉ>`.
+- **Rendu dans la discussion :** Après chaque modification UI importante ou correctif de bug, prends une capture d'écran de la page.
+- **Sauvegarde & Insertion Markdown :** 
+  1. Enregistre le screenshot dans un dossier temporaire (ex: `.t3/screenshots/screenshot-<PORT>.png`).
+  2. **Insère la capture d'écran directement dans le message de réponse du thread** en utilisant la syntaxe Markdown :
+     `![Capture d'écran de l'application](.t3/screenshots/screenshot-<PORT>.png)`
+  3. Décris brièvement sous l'image ce que la capture montre pour valider visuellement le résultat.
+
+### 4. Correctifs Visuels Autonomes
+- Si la capture d'écran montre une erreur React (Red Screen), un composant cassé ou un problème de layout, corrige le code et reprends une nouvelle capture d'écran pour valider la résolution.
+
+### 5. Nettoyage après Test
+- Une fois le travail validé et le screenshot affiché dans le thread, arrête le processus Expo lié au port :
+  `npx kill-port <PORT_GÉNÉRÉ>`
