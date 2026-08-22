@@ -97,13 +97,14 @@ export async function startWorkout(db: SQLiteDatabase, templateId?: number): Pro
       for (const [i, te] of tExercises.entries()) {
         for (let s = 0; s < te.target_sets; s++) {
           await db.runAsync(
-            `INSERT INTO sets (workout_id, exercise_id, weight, reps, set_order)
-             VALUES (?, ?, ?, ?, ?)`,
+            `INSERT INTO sets (workout_id, exercise_id, weight, reps, set_order, side)
+             VALUES (?, ?, ?, ?, ?, ?)`,
             workoutId,
             te.exercise_id,
             te.target_weight ?? 0,
             te.target_reps,
-            i * 100 + s
+            i * 100 + s,
+            te.side ?? null
           );
         }
       }
@@ -582,6 +583,8 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
     top_weight_left: number | null;
     top_weight_right: number | null;
     best_set_reps: number;
+    best_set_reps_left: number | null;
+    best_set_reps_right: number | null;
     date: string;
   }>(
     `SELECT s.exercise_id, e.name,
@@ -589,6 +592,8 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
             MAX(CASE WHEN s.side = 'left' THEN s.weight END) AS top_weight_left,
             MAX(CASE WHEN s.side = 'right' THEN s.weight END) AS top_weight_right,
             MAX(s.reps) AS best_set_reps,
+            MAX(CASE WHEN s.side = 'left' THEN s.reps END) AS best_set_reps_left,
+            MAX(CASE WHEN s.side = 'right' THEN s.reps END) AS best_set_reps_right,
             (SELECT w2.date FROM sets s2 JOIN workouts w2 ON w2.id = s2.workout_id
              WHERE s2.exercise_id = s.exercise_id AND w2.completed = 1 AND s2.done = 1
                AND s2.side IS s.side ${periodFilter}
@@ -693,6 +698,7 @@ export interface ImportStats {
   skipped: number;
   setsImported: number;
   exercisesCreated: number;
+  routinesCreated: number;
 }
 
 /**
@@ -737,7 +743,13 @@ export async function importStrongWorkouts(
   /** Groupe musculaire des nouveaux exercices créés (nom CSV -> muscle). */
   newExerciseMuscles: Record<string, string> = {}
 ): Promise<ImportStats> {
-  const stats: ImportStats = { imported: 0, skipped: 0, setsImported: 0, exercisesCreated: 0 };
+  const stats: ImportStats = {
+    imported: 0,
+    skipped: 0,
+    setsImported: 0,
+    exercisesCreated: 0,
+    routinesCreated: 0,
+  };
 
   const existing = new Set(
     (
@@ -752,8 +764,21 @@ export async function importStrongWorkouts(
     await db.getAllAsync<{ id: number; name: string }>('SELECT id, name FROM exercises')
   );
 
+  // Résolution nom CSV -> id d'exercice, mémorisée pour construire les routines
+  const resolvedByName = new Map<string, number>();
+  // Séances importées par nom de routine (on garde la plus récente comme référence)
+  const importedByName = new Map<
+    string,
+    {
+      startedAt: number;
+      sets: { exerciseName: string; weight: number; reps: number; side?: 'left' | 'right' | null }[];
+    }
+  >();
+
   // withExclusiveTransactionAsync n'est pas supporté sur web (SQLite WASM)
-  const execImport = async (txn: Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync'>) => {
+  const execImport = async (
+    txn: Pick<SQLiteDatabase, 'runAsync' | 'getFirstAsync' | 'getAllAsync'>
+  ) => {
     for (const w of workouts) {
       if (existing.has(w.startedAt)) {
         stats.skipped++;
@@ -790,6 +815,7 @@ export async function importStrongWorkouts(
             stats.exercisesCreated++;
           }
         }
+        resolvedByName.set(s.exerciseName, ex.id);
         await txn.runAsync(
           `INSERT INTO sets (workout_id, exercise_id, weight, reps, rpe, done, set_order, side)
            VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
@@ -803,9 +829,16 @@ export async function importStrongWorkouts(
         );
         stats.setsImported++;
       }
+
+      const prev = w.name ? importedByName.get(w.name) : undefined;
+      if (!prev || w.startedAt > prev.startedAt) {
+        importedByName.set(w.name, { startedAt: w.startedAt, sets: w.sets });
+      }
       existing.add(w.startedAt);
       stats.imported++;
     }
+
+    await createRoutinesFromImports(txn, importedByName, resolvedByName, stats);
   };
 
   if (Platform.OS === 'web') {
@@ -815,4 +848,95 @@ export async function importStrongWorkouts(
   }
 
   return stats;
+}
+
+/**
+ * Crée une routine par nom de séance importée (la plus récente sert de
+ * référence pour l'ordre des exercices et les cibles). Un exercice unilatéral
+ * enregistré deux fois (bloc droit puis bloc gauche) donne deux entrées :
+ * la première côté droit, la seconde côté gauche.
+ */
+async function createRoutinesFromImports(
+  txn: Pick<SQLiteDatabase, 'runAsync' | 'getAllAsync'>,
+  importedByName: Map<
+    string,
+    {
+      startedAt: number;
+      sets: { exerciseName: string; weight: number; reps: number; side?: 'left' | 'right' | null }[];
+    }
+  >,
+  resolvedByName: Map<string, number>,
+  stats: ImportStats
+) {
+  const existingTemplates = new Set(
+    (await txn.getAllAsync<{ name: string }>('SELECT name FROM templates')).map((r) => r.name)
+  );
+
+  for (const [name, ref] of importedByName) {
+    if (!name.trim() || existingTemplates.has(name)) continue;
+
+    // Entrées dans l'ordre de première apparition ; pour un exercice
+    // unilatéral le tri stable du parseur place le bloc droit avant le bloc
+    // gauche, donc la routine alterne bien droit puis gauche.
+    const entries = new Map<
+      string,
+      { exerciseId: number; side: SetSide | null; weights: number[]; reps: number[] }
+    >();
+    for (const s of ref.sets) {
+      const exerciseId = resolvedByName.get(s.exerciseName);
+      if (exerciseId === undefined) continue;
+      const key = `${s.exerciseName}|${s.side ?? ''}`;
+      let e = entries.get(key);
+      if (!e) {
+        e = { exerciseId, side: s.side ?? null, weights: [], reps: [] };
+        entries.set(key, e);
+      }
+      e.weights.push(s.weight);
+      e.reps.push(s.reps);
+    }
+    if (entries.size === 0) continue;
+
+    const templateId = (
+      await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', '')
+    ).lastInsertRowId;
+
+    let orderIndex = 0;
+    for (const e of entries.values()) {
+      await txn.runAsync(
+        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index, side)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        templateId,
+        e.exerciseId,
+        e.weights.length,
+        mostCommon(e.reps),
+        roundHalf(e.weights.reduce((a, b) => Math.max(a, b), 0)),
+        orderIndex,
+        e.side
+      );
+      orderIndex++;
+    }
+    existingTemplates.add(name);
+    stats.routinesCreated++;
+  }
+}
+
+/** Valeur la plus fréquente (repli : moyenne arrondie). */
+function mostCommon(values: number[]): number {
+  if (values.length === 0) return 10;
+  const counts = new Map<number, number>();
+  let best = values[0];
+  let bestCount = 0;
+  for (const v of values) {
+    const c = (counts.get(v) ?? 0) + 1;
+    counts.set(v, c);
+    if (c > bestCount) {
+      best = v;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
+function roundHalf(value: number): number {
+  return Math.round(value * 2) / 2;
 }

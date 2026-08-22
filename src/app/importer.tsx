@@ -171,7 +171,8 @@ export default function ImportScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Importer depuis Strong</Text>
         <Text style={{ color: colors.textSecondary }}>
           Dans l&apos;app Strong : Réglages → Exporter les données → Format CSV. Sélectionne ensuite
-          le fichier ici. Les séances déjà présentes sont ignorées automatiquement.
+          le fichier ici. Les séances déjà présentes sont ignorées automatiquement et une routine est
+          créée pour chaque nom de séance (droite puis gauche pour les exercices unilatéraux).
         </Text>
 
         <Pressable
@@ -252,6 +253,7 @@ export default function ImportScreen() {
           <Text style={{ color: colors.text }}>
             ✓ {stats.imported} séances importées · {stats.setsImported} séries ·{' '}
             {stats.exercisesCreated} nouveaux exercices
+            {stats.routinesCreated > 0 ? ` · ${stats.routinesCreated} routines créées` : ''}
             {stats.skipped > 0 ? ` · ${stats.skipped} doublons ignorés` : ''}
           </Text>
         )}

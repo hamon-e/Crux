@@ -72,7 +72,10 @@ export default function RoutineEditorScreen() {
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
             <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={64} radius={6} />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{te.exercise.name}</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>
+                {te.exercise.name}
+                {te.side ? ` (${te.side === 'right' ? 'droite' : 'gauche'})` : ''}
+              </Text>
               <View style={styles.stepperRow}>
                 <Stepper
                   label="séries"
