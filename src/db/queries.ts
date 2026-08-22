@@ -582,6 +582,8 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
     top_weight_left: number | null;
     top_weight_right: number | null;
     best_set_reps: number;
+    best_set_reps_left: number | null;
+    best_set_reps_right: number | null;
     date: string;
   }>(
     `SELECT s.exercise_id, e.name,
@@ -589,6 +591,8 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
             MAX(CASE WHEN s.side = 'left' THEN s.weight END) AS top_weight_left,
             MAX(CASE WHEN s.side = 'right' THEN s.weight END) AS top_weight_right,
             MAX(s.reps) AS best_set_reps,
+            MAX(CASE WHEN s.side = 'left' THEN s.reps END) AS best_set_reps_left,
+            MAX(CASE WHEN s.side = 'right' THEN s.reps END) AS best_set_reps_right,
             (SELECT w2.date FROM sets s2 JOIN workouts w2 ON w2.id = s2.workout_id
              WHERE s2.exercise_id = s.exercise_id AND w2.completed = 1 AND s2.done = 1
                AND s2.side IS s.side ${periodFilter}
