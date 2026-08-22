@@ -9,6 +9,8 @@ const CELL = 14;
 const GAP = 3;
 const FALLBACK_COLOR = '#4a90d9';
 
+export const HEATMAP_CARD_WIDTH = WEEKS * (CELL - GAP) + (WEEKS - 1) * GAP + 16 * 2;
+
 export interface DayInfo {
   count: number;
   color: string;
