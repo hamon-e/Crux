@@ -578,7 +578,7 @@ export async function getCurrentWeekDailyVolume(db: SQLiteDatabase) {
             SUM(CASE WHEN s.done = 1 THEN s.weight * s.reps ELSE 0 END) AS volume,
             SUM(CASE WHEN s.done = 1 THEN 1 ELSE 0 END) AS set_count,
             COUNT(DISTINCT w.id) AS workout_count
-     FROM workouts w JOIN sets s ON s.workout_id = w.id
+     FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
      WHERE w.completed = 1 AND w.date >= date('now', 'weekday 1', '-6 days') AND w.date <= date('now')
      GROUP BY w.date ORDER BY w.date`
   );
