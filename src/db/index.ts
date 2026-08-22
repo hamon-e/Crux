@@ -148,7 +148,7 @@ DROP TABLE _catalog;
   }
 
   if (currentDbVersion < 8) {
-    // v8 : types d'activité réutilisables (nom + couleur) pour la saisie rapide.
+    // v8 : types de séance réutilisables (nom + couleur) pour la saisie rapide.
     await db.execAsync(`
 CREATE TABLE IF NOT EXISTS activity_types (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS activity_types (
   color TEXT NOT NULL DEFAULT ''
 );
 `);
-    // Amorçage : les activités déjà saisies deviennent des types réutilisables.
+    // Amorçage : les séances déjà saisies deviennent des types réutilisables.
     const typeCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)');
     if (typeCols.some((c) => c.name === 'duration_min')) {
       await db.execAsync(`

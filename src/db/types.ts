@@ -105,7 +105,7 @@ export interface TemplateExercise {
   exercise_name?: string;
 }
 
-export interface ActivityType {
+export interface SeanceType {
   id: number;
   name: string;
   color: string;

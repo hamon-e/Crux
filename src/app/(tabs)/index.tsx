@@ -43,7 +43,7 @@ function formatElapsed(ms: number) {
     : `${m}:${String(s).padStart(2, '0')}`;
 }
 
-const ACTIVITY_TYPES = ['Grimpe bloc', 'Grimpe voie', 'Vélo', 'Course', 'Natation', 'Randonnée'];
+const SEANCE_TYPES = ['Grimpe bloc', 'Grimpe voie', 'Vélo', 'Course', 'Natation', 'Randonnée'];
 
 export default function SessionScreen() {
   const db = useSQLiteContext();
@@ -163,11 +163,11 @@ export default function SessionScreen() {
 
           <Pressable
             style={[styles.primaryButton, { backgroundColor: '#007AFF' }]}
-            onPress={() => router.push('/ajouter-activite')}>
-            <Text style={styles.primaryButtonText}>Ajouter un séance</Text>
+            onPress={() => router.push('/ajouter-seance')}>
+            <Text style={styles.primaryButtonText}>Ajouter une séance</Text>
           </Pressable>
           <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
-            {ACTIVITY_TYPES.slice(0, -1).join(', ').toLowerCase()}…
+            {SEANCE_TYPES.slice(0, -1).join(', ').toLowerCase()}…
           </Text>
 
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
