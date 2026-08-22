@@ -68,7 +68,11 @@ export default function WorkoutDetailScreen() {
         ) : null}
 
         {detail.exercises.map((group) => (
-          <View key={group.exercise.id} style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
+          <Pressable
+            key={group.exercise.id}
+            style={[styles.card, { backgroundColor: colors.backgroundElement }]}
+            onPress={() => router.push(`/exercice/${group.exercise.id}`)}
+            android_ripple={{ color: colors.border }}>
             <Text style={[styles.exerciseName, { color: colors.text }]}>
             {group.exercise.name}
             {group.side ? ` — ${SIDE_LABELS[group.side]}` : ''}
@@ -81,7 +85,7 @@ export default function WorkoutDetailScreen() {
             {group.sets.every((s) => !s.done) && (
               <Text style={{ color: colors.textSecondary }}>Aucune série validée</Text>
             )}
-          </View>
+          </Pressable>
         ))}
 
         <View style={styles.actions}>
