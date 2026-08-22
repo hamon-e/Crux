@@ -102,7 +102,17 @@ export interface TemplateExercise {
   target_reps: number;
   target_weight: number;
   order_index: number;
+  /** Exercice unilatéral : côté visé par cette entrée (null = bilatéral). */
+  side: SetSide | null;
   exercise_name?: string;
+}
+
+export interface TemplateSet {
+  id: number;
+  template_exercise_id: number;
+  set_index: number;
+  target_reps: number;
+  target_weight: number;
 }
 
 export interface SeanceType {
