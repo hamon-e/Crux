@@ -79,21 +79,19 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
     const currentWeekStart = todayMs - ((new Date(todayMs).getUTCDay() + 6) % 7) * DAY_MS;
     const oldestWeekStart = currentWeekStart - (WEEKS - 1) * 7 * DAY_MS;
 
-    const cols: ({ key: string; info: DayInfo } | null)[][] = [];
+    const cols: ({ key: string; info: DayInfo | null } | null)[][] = [];
     for (let w = 0; w < WEEKS; w++) {
       const colStart = currentWeekStart - w * 7 * DAY_MS;
       if (colStart < oldestWeekStart) break;
-      const col: ({ key: string; info: DayInfo } | null)[] = [];
+      const col: ({ key: string; info: DayInfo | null } | null)[] = [];
       for (let d = 0; d < 7; d++) {
         const ms = colStart + d * DAY_MS;
         if (ms > todayMs) {
           col.push(null);
           continue;
         }
-        const info = days.get(keyOf(ms));
-        // Pas de case pour les jours sans séance : on garde juste un
-        // emplacement vide pour préserver l'alignement du calendrier.
-        col.push(info ? { key: keyOf(ms), info } : null);
+        const info = days.get(keyOf(ms)) ?? null;
+        col.push({ key: keyOf(ms), info });
       }
       cols.push(col);
     }
@@ -111,11 +109,18 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
       <View style={styles.grid}>
         {weeks.map((col, i) => (
           <View key={i} style={styles.col}>
-            {col.map((cell, j) =>
-              cell ? (
-                <DayCell key={cell.key} info={cell.info} maxCount={maxCount} />
-              ) : null
-            )}
+            {col.map((cell, j) => {
+              if (!cell) return null;
+              if (!cell.info) {
+                return (
+                  <View
+                    key={cell.key}
+                    style={[styles.cell, { backgroundColor: colors.backgroundSelected }]}
+                  />
+                );
+              }
+              return <DayCell key={cell.key} info={cell.info} maxCount={maxCount} />;
+            })}
           </View>
         ))}
       </View>
