@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import {
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -53,6 +54,7 @@ export default function SessionScreen() {
   const [templates, setTemplates] = useState<(Template & { exercise_count: number })[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [restRemaining, setRestRemaining] = useState<number | null>(null);
+  const [finishOpen, setFinishOpen] = useState(false);
   const restInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -118,38 +120,27 @@ export default function SessionScreen() {
 
   function handleFinish() {
     if (!workout) return;
+    if (!workout.template_id) {
+      confirm('Terminer la séance', 'Enregistrer et clôturer cette séance ?', [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Terminer', onPress: () => void doFinish(false) },
+      ]);
+      return;
+    }
+    setFinishOpen(true);
+  }
+
+  async function doFinish(syncRoutine: boolean) {
+    if (!workout) return;
     const templateId = workout.template_id;
-    const actions = [
-      { text: 'Annuler', style: 'cancel' as const },
-      ...(templateId
-        ? [
-            {
-              text: 'Mettre à jour la routine',
-              onPress: async () => {
-                stopRest();
-                await syncTemplateFromWorkout(db, templateId, workout.id);
-                await finishWorkout(db, workout.id);
-                await reload();
-                router.push(`/historique/${workout.id}`);
-              },
-            },
-          ]
-        : []),
-      {
-        text: templateId ? 'Terminer sans mettre à jour' : 'Terminer',
-        style: templateId ? ('default' as const) : undefined,
-        onPress: async () => {
-          stopRest();
-          await finishWorkout(db, workout.id);
-          await reload();
-          router.push(`/historique/${workout.id}`);
-        },
-      },
-    ];
-    const message = templateId
-      ? 'Clôturer cette séance et enregistrer les valeurs dans la routine ?'
-      : 'Enregistrer et clôturer cette séance ?';
-    confirm('Terminer la séance', message, actions);
+    setFinishOpen(false);
+    stopRest();
+    if (templateId && syncRoutine) {
+      await syncTemplateFromWorkout(db, templateId, workout.id);
+    }
+    await finishWorkout(db, workout.id);
+    await reload();
+    router.push(`/historique/${workout.id}`);
   }
 
   async function handleDiscard() {
@@ -273,6 +264,31 @@ export default function SessionScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal visible={finishOpen} transparent animationType="fade" onRequestClose={() => setFinishOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setFinishOpen(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.backgroundElement }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Terminer la séance</Text>
+            <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+              Enregistrer les modifications dans la routine{' '}
+              {templates.find((t) => t.id === workout?.template_id)?.name ? `« ${templates.find((t) => t.id === workout?.template_id)?.name} »` : ''} ?
+            </Text>
+            <Pressable
+              style={[styles.finishButton, { backgroundColor: '#007AFF' }]}
+              onPress={() => void doFinish(true)}>
+              <Text style={styles.primaryButtonText}>Enregistrer dans la routine</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.finishButton, { borderColor: '#007AFF' }]}
+              onPress={() => void doFinish(false)}>
+              <Text style={{ color: '#007AFF', fontWeight: '700', fontSize: 16 }}>Terminer sans enregistrer</Text>
+            </Pressable>
+            <Pressable style={styles.cancelButton} onPress={() => setFinishOpen(false)}>
+              <Text style={{ color: colors.textSecondary, fontSize: 16 }}>Annuler</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -371,5 +387,35 @@ const styles = StyleSheet.create({
   restText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: '#0009',
+    padding: 32,
+  },
+  modalCard: {
+    borderRadius: 20,
+    padding: 24,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  modalMessage: {
+    fontSize: 15,
+    marginBottom: 8,
+  },
+  finishButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  cancelButton: {
+    alignItems: 'center',
+    paddingVertical: 6,
   },
 });
