@@ -63,8 +63,8 @@ export default function AddActivityScreen() {
     }
     setSaving(true);
     try {
-      const id = await logActivityWorkout(db, selectedType.name, mins, notes.trim(), selectedType.color);
-      router.replace(`/historique/${id}`);
+      await logActivityWorkout(db, selectedType.name, mins, notes.trim(), selectedType.color);
+      router.back();
     } catch (e) {
       setSaving(false);
       const message = e instanceof Error ? e.message : String(e);
