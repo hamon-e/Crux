@@ -552,11 +552,11 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
             (SELECT w2.date FROM sets s2 JOIN workouts w2 ON w2.id = s2.workout_id
              WHERE s2.exercise_id = s.exercise_id AND w2.completed = 1 AND s2.done = 1
                AND s2.side IS s.side ${periodFilter}
-             ORDER BY s2.weight DESC LIMIT 1) AS date
+             ORDER BY s2.weight DESC, s2.reps DESC LIMIT 1) AS date
      FROM sets s JOIN exercises e ON e.id = s.exercise_id
      JOIN workouts w ON w.id = s.workout_id
-     WHERE w.completed = 1 AND s.done = 1 AND s.weight > 0 ${periodFilter}
-     GROUP BY s.exercise_id ORDER BY top_weight DESC`
+     WHERE w.completed = 1 AND s.done = 1 ${periodFilter}
+     GROUP BY s.exercise_id ORDER BY top_weight DESC, best_set_reps DESC`
   );
 }
 
