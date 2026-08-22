@@ -18,8 +18,8 @@ interface Props {
   previousTop?: { weight: number; reps: number } | null;
   onAddSet: () => void;
   onUpdateSet: (setId: number, updates: { weight?: number; reps?: number; done?: number }) => void;
-  onDeleteSet: (setId: number) => void;
-  onRemoveExercise: () => void;
+  onDeleteSet?: (setId: number) => void;
+  onRemoveExercise?: () => void;
 }
 
 export function WorkoutExerciseCard({
@@ -51,9 +51,11 @@ export function WorkoutExerciseCard({
               : `${exercise.muscle} · ${exercise.equipment}`}
           </Text>
         </View>
-        <Pressable hitSlop={8} onPress={onRemoveExercise}>
-          <Text style={{ color: '#FF453A' }}>Retirer</Text>
-        </Pressable>
+        {onRemoveExercise && (
+          <Pressable hitSlop={8} onPress={onRemoveExercise}>
+            <Text style={{ color: '#FF453A' }}>Retirer</Text>
+          </Pressable>
+        )}
       </Pressable>
 
       {expanded && (
@@ -100,9 +102,11 @@ export function WorkoutExerciseCard({
                 onPress={() => onUpdateSet(s.id, { done: s.done ? 0 : 1 })}>
                 {s.done ? <Text style={styles.doneCheck}>✓</Text> : null}
               </Pressable>
-              <Pressable hitSlop={8} style={styles.colDelete} onPress={() => onDeleteSet(s.id)}>
-                <Text style={{ color: '#FF453A' }}>×</Text>
-              </Pressable>
+              {onDeleteSet && (
+                <Pressable hitSlop={8} style={styles.colDelete} onPress={() => onDeleteSet(s.id)}>
+                  <Text style={{ color: '#FF453A' }}>×</Text>
+                </Pressable>
+              )}
             </View>
           ))}
 

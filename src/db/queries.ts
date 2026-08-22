@@ -463,6 +463,46 @@ export async function removeTemplateExercise(db: SQLiteDatabase, templateExercis
   await db.runAsync('DELETE FROM template_exercises WHERE id = ?', templateExerciseId);
 }
 
+/** Remplace le contenu du template par ce qui a réellement été fait pendant la séance (exos, séries, poids/reps). */
+export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: number, workoutId: number) {
+  await db.withTransactionAsync(async () => {
+    const rows = await db.getAllAsync<{
+      exercise_id: number;
+      weight: number;
+      reps: number;
+      set_order: number;
+    }>('SELECT exercise_id, weight, reps, set_order FROM sets WHERE workout_id = ? ORDER BY set_order, id', workoutId);
+    const groups = new Map<
+      number,
+      { exercise_id: number; weight: number; reps: number; order: number; count: number }
+    >();
+    for (const r of rows) {
+      let g = groups.get(r.exercise_id);
+      if (!g) {
+        g = { exercise_id: r.exercise_id, weight: r.weight, reps: r.reps, order: r.set_order, count: 0 };
+        groups.set(r.exercise_id, g);
+      }
+      g.weight = r.weight;
+      g.reps = r.reps;
+      g.count++;
+    }
+    await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
+    let i = 0;
+    for (const g of [...groups.values()].sort((a, b) => a.order - b.order)) {
+      await db.runAsync(
+        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        templateId,
+        g.exercise_id,
+        g.count,
+        g.reps,
+        g.weight,
+        i++
+      );
+    }
+  });
+}
+
 // ---------- Stats ----------
 
 /** 1RM estimé via formule d'Epley : poids * (1 + reps / 30) */
