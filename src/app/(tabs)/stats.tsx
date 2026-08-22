@@ -23,6 +23,7 @@ const MUSCLE_LABELS: Record<string, string> = {
   biceps: 'Biceps',
   triceps: 'Triceps',
   forearms: 'Avant-bras',
+  fingers: 'Doigts',
   core: 'Abdos',
   quads: 'Quadriceps',
   hamstrings: 'Ischios',
