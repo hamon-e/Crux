@@ -125,7 +125,7 @@ export default function RoutineEditorScreen() {
             style={[styles.button, { backgroundColor: '#007AFF' }]}
             onPress={async () => {
               await startWorkout(db, detail.id);
-              router.replace('/(tabs)');
+              router.dismissTo('/');
             }}>
             <Text style={styles.buttonText}>Démarrer avec cette routine</Text>
           </Pressable>
