@@ -4,7 +4,7 @@ import { SEED_EXERCISES } from './seed-exercises';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 8;
+export const DATABASE_VERSION = 9;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS settings (
         );
       }
       await db.execAsync(`
+DELETE FROM exercises WHERE is_custom = 0 AND id NOT IN (SELECT DISTINCT exercise_id FROM sets);
+
 UPDATE exercises
 SET muscle = (SELECT c.muscle FROM _catalog c WHERE c.name = exercises.name),
     equipment = (SELECT c.equipment FROM _catalog c WHERE c.name = exercises.name)
@@ -98,8 +100,6 @@ WHERE name IN (SELECT name FROM _catalog);
 
 INSERT OR IGNORE INTO exercises (name, muscle, equipment, is_custom)
 SELECT name, muscle, equipment, 0 FROM _catalog;
-
-DELETE FROM exercises WHERE is_custom = 0 AND id NOT IN (SELECT DISTINCT exercise_id FROM sets);
 
 DROP TABLE _catalog;
 `);
@@ -166,6 +166,36 @@ WHERE completed = 1 AND name != '' AND duration_min IS NOT NULL
 GROUP BY name;
 `);
     }
+  }
+
+  if (currentDbVersion < 9) {
+    // v9 : ré-amorce le catalogue d'exercices (la migration v3 l'effaçait sur
+    // les bases sans séries à cause d'un DELETE mal ordonné).
+    // Idempotent : ne touche ni aux exercices personnalisés ni à ceux existants.
+    await db.execAsync(
+      'CREATE TEMP TABLE IF NOT EXISTS _catalog (name TEXT PRIMARY KEY, muscle TEXT NOT NULL, equipment TEXT NOT NULL)'
+    );
+    await db.withTransactionAsync(async () => {
+      for (const [name, muscle, equipment] of SEED_EXERCISES) {
+        await db.runAsync(
+          'INSERT OR REPLACE INTO _catalog (name, muscle, equipment) VALUES (?, ?, ?)',
+          name,
+          muscle,
+          equipment
+        );
+      }
+      await db.execAsync(`
+INSERT OR IGNORE INTO exercises (name, muscle, equipment, is_custom)
+SELECT name, muscle, equipment, 0 FROM _catalog;
+
+UPDATE exercises
+SET muscle = (SELECT c.muscle FROM _catalog c WHERE c.name = exercises.name),
+    equipment = (SELECT c.equipment FROM _catalog c WHERE c.name = exercises.name)
+WHERE name IN (SELECT name FROM _catalog);
+
+DROP TABLE _catalog;
+`);
+    });
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
