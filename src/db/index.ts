@@ -4,7 +4,7 @@ import { SEED_EXERCISES } from './seed-exercises';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 7;
+export const DATABASE_VERSION = 8;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -144,6 +144,27 @@ DROP TABLE _catalog;
     const workoutCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)');
     if (!workoutCols.some((c) => c.name === 'color')) {
       await db.execAsync("ALTER TABLE workouts ADD COLUMN color TEXT NOT NULL DEFAULT ''");
+    }
+  }
+
+  if (currentDbVersion < 8) {
+    // v8 : types d'activité réutilisables (nom + couleur) pour la saisie rapide.
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS activity_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  color TEXT NOT NULL DEFAULT ''
+);
+`);
+    // Amorçage : les activités déjà saisies deviennent des types réutilisables.
+    const typeCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)');
+    if (typeCols.some((c) => c.name === 'duration_min')) {
+      await db.execAsync(`
+INSERT OR IGNORE INTO activity_types (name, color)
+SELECT name, color FROM workouts
+WHERE completed = 1 AND name != '' AND duration_min IS NOT NULL
+GROUP BY name;
+`);
     }
   }
 
