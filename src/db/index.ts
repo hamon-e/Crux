@@ -4,7 +4,7 @@ import { SEED_EXERCISES } from './seed-exercises';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 9;
+export const DATABASE_VERSION = 10;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -196,6 +196,38 @@ WHERE name IN (SELECT name FROM _catalog);
 DROP TABLE _catalog;
 `);
     });
+  }
+
+  if (currentDbVersion < 10) {
+    // v10 : cible par série dans les routines (reps et poids propres à chaque série).
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS template_sets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  template_exercise_id INTEGER NOT NULL REFERENCES template_exercises(id) ON DELETE CASCADE,
+  set_index INTEGER NOT NULL,
+  target_reps INTEGER NOT NULL DEFAULT 10,
+  target_weight REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_template_sets_te ON template_sets(template_exercise_id);
+`);
+    // Amorçage : décline les cibles uniformes existantes en lignes par série.
+    const tes = await db.getAllAsync<{
+      id: number;
+      target_sets: number;
+      target_reps: number;
+      target_weight: number;
+    }>('SELECT id, target_sets, target_reps, target_weight FROM template_exercises');
+    for (const te of tes) {
+      for (let i = 0; i < te.target_sets; i++) {
+        await db.runAsync(
+          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight) VALUES (?, ?, ?, ?)',
+          te.id,
+          i,
+          te.target_reps,
+          te.target_weight
+        );
+      }
+    }
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

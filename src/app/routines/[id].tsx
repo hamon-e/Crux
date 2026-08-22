@@ -10,10 +10,11 @@ import {
   getTemplateDetail,
   removeTemplateExercise,
   renameTemplate,
+  setTemplateExerciseSetCount,
   startWorkout,
-  updateTemplateExercise,
+  updateTemplateSet,
 } from '@/db/queries';
-import type { Exercise, TemplateExercise } from '@/db/types';
+import type { Exercise, TemplateExercise, TemplateSet } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
 
@@ -70,42 +71,46 @@ export default function RoutineEditorScreen() {
           <View
             key={te.id}
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-            <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={64} radius={6} />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{te.exercise.name}</Text>
-              <View style={styles.stepperRow}>
-                <Stepper
-                  label="séries"
-                  value={te.target_sets}
-                  min={1}
-                  colors={colors}
-                  onChange={(delta) => void updateTe(te, { target_sets: Math.max(1, te.target_sets + delta) })}
-                />
-                <Text style={{ color: colors.textSecondary }}>×</Text>
+            <View style={styles.cardHeader}>
+              <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={48} radius={6} />
+              <Text style={[styles.exerciseName, { color: colors.text }]}>{te.exercise.name}</Text>
+              <Pressable hitSlop={8} onPress={() => void removeTe(te)}>
+                <Text style={{ color: '#FF453A' }}>×</Text>
+              </Pressable>
+            </View>
+            <Stepper
+              label="séries"
+              value={te.sets.length}
+              min={1}
+              colors={colors}
+              onChange={(delta) => void changeSetCount(te, Math.max(1, te.sets.length + delta))}
+            />
+            {te.sets.map((ts, i) => (
+              <View key={ts.id} style={styles.setRow}>
+                <Text style={{ color: colors.textSecondary, width: 28 }}>S{i + 1}</Text>
                 <Stepper
                   label="reps"
-                  value={te.target_reps}
+                  value={ts.target_reps}
                   min={1}
-                  step={te.target_reps >= 20 ? 5 : 1}
+                  step={ts.target_reps >= 20 ? 5 : 1}
                   colors={colors}
-                  onChange={(delta) => void updateTe(te, { target_reps: Math.max(1, te.target_reps + delta) })}
+                  onChange={(delta) => void updateTs(ts, { target_reps: Math.max(1, ts.target_reps + delta) })}
                 />
                 <Stepper
                   label="kg"
-                  value={te.target_weight ?? 0}
+                  value={ts.target_weight ?? 0}
                   min={0}
                   step={2.5}
                   format={(v) => Number.isInteger(v) ? String(v) : v.toFixed(1)}
                   colors={colors}
                   onChange={(delta) =>
-                    void updateTe(te, { target_weight: Math.max(0, Math.round((te.target_weight + delta) * 10) / 10) })
+                    void updateTs(ts, {
+                      target_weight: Math.max(0, Math.round(((ts.target_weight ?? 0) + delta) * 10) / 10),
+                    })
                   }
                 />
               </View>
-            </View>
-            <Pressable hitSlop={8} onPress={() => void removeTe(te)}>
-              <Text style={{ color: '#FF453A' }}>×</Text>
-            </Pressable>
+            ))}
           </View>
         ))}
 
@@ -134,16 +139,21 @@ export default function RoutineEditorScreen() {
     </SafeAreaView>
   );
 
-  async function removeTe(te: TemplateExercise & { exercise: Exercise }) {
+  async function removeTe(te: TemplateExercise & { exercise: Exercise; sets: TemplateSet[] }) {
     await removeTemplateExercise(db, te.id);
     await getTemplateDetail(db, Number(id)).then(setDetail);
   }
 
-  async function updateTe(
-    te: TemplateExercise & { exercise: Exercise },
-    updates: { target_sets?: number; target_reps?: number; target_weight?: number }
+  async function changeSetCount(
+    te: TemplateExercise & { exercise: Exercise; sets: TemplateSet[] },
+    count: number
   ) {
-    await updateTemplateExercise(db, te.id, updates);
+    await setTemplateExerciseSetCount(db, te.id, count);
+    await getTemplateDetail(db, Number(id)).then(setDetail);
+  }
+
+  async function updateTs(ts: TemplateSet, updates: { target_reps?: number; target_weight?: number }) {
+    await updateTemplateSet(db, ts.id, updates);
     await getTemplateDetail(db, Number(id)).then(setDetail);
   }
 }
@@ -190,10 +200,11 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  exerciseName: { flex: 1, fontWeight: '700' },
+  setRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 8 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addButton: {
