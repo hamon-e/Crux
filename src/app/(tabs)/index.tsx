@@ -17,7 +17,6 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
   addSet,
-  deleteSet,
   deleteWorkout,
   finishWorkout,
   getActiveWorkout,
@@ -25,6 +24,7 @@ import {
   getTemplates,
   getWorkoutDetail,
   startWorkout,
+  syncTemplateFromWorkout,
   updateSet,
   updateWorkoutName,
   type SetUpdates,
@@ -118,10 +118,26 @@ export default function SessionScreen() {
 
   function handleFinish() {
     if (!workout) return;
-    confirm('Terminer la séance', 'Enregistrer et clôturer cette séance ?', [
-      { text: 'Annuler', style: 'cancel' },
+    const templateId = workout.template_id;
+    const actions = [
+      { text: 'Annuler', style: 'cancel' as const },
+      ...(templateId
+        ? [
+            {
+              text: 'Mettre à jour la routine',
+              onPress: async () => {
+                stopRest();
+                await syncTemplateFromWorkout(db, templateId, workout.id);
+                await finishWorkout(db, workout.id);
+                await reload();
+                router.push(`/historique/${workout.id}`);
+              },
+            },
+          ]
+        : []),
       {
-        text: 'Terminer',
+        text: templateId ? 'Terminer sans mettre à jour' : 'Terminer',
+        style: templateId ? ('default' as const) : undefined,
         onPress: async () => {
           stopRest();
           await finishWorkout(db, workout.id);
@@ -129,7 +145,11 @@ export default function SessionScreen() {
           router.push(`/historique/${workout.id}`);
         },
       },
-    ]);
+    ];
+    const message = templateId
+      ? 'Clôturer cette séance et enregistrer les valeurs dans la routine ?'
+      : 'Enregistrer et clôturer cette séance ?';
+    confirm('Terminer la séance', message, actions);
   }
 
   async function handleDiscard() {
@@ -232,14 +252,6 @@ export default function SessionScreen() {
                 await reload();
               }}
               onUpdateSet={(setId, updates) => handleUpdateSet(setId, updates)}
-              onDeleteSet={async (setId) => {
-                await deleteSet(db, setId);
-                await reload();
-              }}
-              onRemoveExercise={async () => {
-                for (const s of item.sets) await deleteSet(db, s.id);
-                await reload();
-              }}
             />
           )}
         />
