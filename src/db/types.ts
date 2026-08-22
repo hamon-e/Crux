@@ -102,6 +102,8 @@ export interface TemplateExercise {
   target_reps: number;
   target_weight: number;
   order_index: number;
+  /** Exercice unilatéral : côté visé par cette entrée (null = bilatéral). */
+  side: SetSide | null;
   exercise_name?: string;
 }
 
