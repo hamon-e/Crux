@@ -477,10 +477,11 @@ export interface ExerciseHistoryEntry {
   started_at: number;
   best_1rm: number;
   volume: number;
+  total_reps: number;
   top_weight: number;
   side_details?: {
-    left?: { best_1rm: number; volume: number; top_weight: number };
-    right?: { best_1rm: number; volume: number; top_weight: number };
+    left?: { best_1rm: number; volume: number; total_reps: number; top_weight: number };
+    right?: { best_1rm: number; volume: number; total_reps: number; top_weight: number };
   };
 }
 
@@ -491,11 +492,13 @@ export async function getExerciseHistory(db: SQLiteDatabase, exerciseId: number)
     side: string | null;
     best_1rm: number;
     volume: number;
+    total_reps: number;
     top_weight: number;
   }>(
     `SELECT w.date, w.started_at, s.side,
             MAX(CASE WHEN s.reps > 0 THEN s.weight * (1 + s.reps / 30.0) ELSE 0 END) AS best_1rm,
             SUM(CASE WHEN s.done = 1 THEN s.weight * s.reps ELSE 0 END) AS volume,
+            SUM(CASE WHEN s.done = 1 THEN s.reps ELSE 0 END) AS total_reps,
             MAX(s.weight) AS top_weight
      FROM sets s JOIN workouts w ON w.id = s.workout_id
      WHERE s.exercise_id = ? AND w.completed = 1 AND s.done = 1
@@ -511,16 +514,18 @@ export async function getExerciseHistory(db: SQLiteDatabase, exerciseId: number)
         started_at: r.started_at,
         best_1rm: 0,
         volume: 0,
+        total_reps: 0,
         top_weight: 0,
       };
       merged.set(r.started_at, entry);
     }
     entry.best_1rm = Math.max(entry.best_1rm, r.best_1rm);
     entry.volume += r.volume;
+    entry.total_reps += r.total_reps;
     entry.top_weight = Math.max(entry.top_weight, r.top_weight);
     if (r.side === 'left' || r.side === 'right') {
       entry.side_details ??= {};
-      const detail = { best_1rm: r.best_1rm, volume: r.volume, top_weight: r.top_weight };
+      const detail = { best_1rm: r.best_1rm, volume: r.volume, total_reps: r.total_reps, top_weight: r.top_weight };
       if (r.side === 'left') entry.side_details.left = detail;
       else entry.side_details.right = detail;
     }

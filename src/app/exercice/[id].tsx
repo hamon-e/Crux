@@ -105,14 +105,14 @@ export default function ExerciseScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ color: colors.text }}>{h.date}</Text>
                 <Text style={{ color: colors.textSecondary }}>
-                  max {h.top_weight} kg · volume {Math.round(h.volume).toLocaleString('fr-FR')} kg
+                  max {h.top_weight} kg · {h.total_reps} reps
                 </Text>
               </View>
               {h.side_details && (
                 <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
-                  {SIDE_LABELS.right} : {Math.round(h.side_details.right?.volume ?? 0).toLocaleString('fr-FR')} kg
+                  {SIDE_LABELS.right} : {h.side_details.right?.total_reps ?? 0} reps
                   {' · '}
-                  {SIDE_LABELS.left} : {Math.round(h.side_details.left?.volume ?? 0).toLocaleString('fr-FR')} kg
+                  {SIDE_LABELS.left} : {h.side_details.left?.total_reps ?? 0} reps
                   {(!h.side_details.left || !h.side_details.right) ? ' (côté manquant)' : ''}
                 </Text>
               )}
