@@ -464,7 +464,9 @@ export async function removeTemplateExercise(db: SQLiteDatabase, templateExercis
   await db.runAsync('DELETE FROM template_exercises WHERE id = ?', templateExerciseId);
 }
 
-/** Remplace le contenu du template par ce qui a réellement été fait pendant la séance (exos, séries, poids/reps). */
+/** Remplace le contenu du template par ce qui a réellement été fait pendant la séance (exos, séries, poids/reps).
+ *  Seules les séries cochées « faites » comptent ; on retombe sur toutes les séries si aucune n'est cochée.
+ *  Regroupement par exercice ET côté pour préserver les entrées unilatérales. */
 export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: number, workoutId: number) {
   await db.withTransactionAsync(async () => {
     const rows = await db.getAllAsync<{
@@ -472,33 +474,53 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
       weight: number;
       reps: number;
       set_order: number;
-    }>('SELECT exercise_id, weight, reps, set_order FROM sets WHERE workout_id = ? ORDER BY set_order, id', workoutId);
-    const groups = new Map<
-      number,
-      { exercise_id: number; weight: number; reps: number; order: number; count: number }
-    >();
+      side: SetSide | null;
+      done: number;
+    }>(
+      'SELECT exercise_id, weight, reps, set_order, side, done FROM sets WHERE workout_id = ? ORDER BY set_order, id',
+      workoutId
+    );
+    // Séance vide : on ne touche pas à la routine plutôt que de la vider.
+    if (rows.length === 0) return;
+
+    interface Group {
+      exercise_id: number;
+      side: SetSide | null;
+      weight: number;
+      reps: number;
+      order: number;
+      count: number;
+      doneCount: number;
+    }
+    const groups = new Map<string, Group>();
     for (const r of rows) {
-      let g = groups.get(r.exercise_id);
+      const key = `${r.exercise_id}|${r.side ?? ''}`;
+      let g = groups.get(key);
       if (!g) {
-        g = { exercise_id: r.exercise_id, weight: r.weight, reps: r.reps, order: r.set_order, count: 0 };
-        groups.set(r.exercise_id, g);
+        g = { exercise_id: r.exercise_id, side: r.side ?? null, weight: r.weight, reps: r.reps, order: r.set_order, count: 0, doneCount: 0 };
+        groups.set(key, g);
       }
-      g.weight = r.weight;
-      g.reps = r.reps;
       g.count++;
+      if (r.done === 1) {
+        g.doneCount++;
+        g.count = g.doneCount;
+        g.weight = r.weight;
+        g.reps = r.reps;
+      }
     }
     await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
     let i = 0;
     for (const g of [...groups.values()].sort((a, b) => a.order - b.order)) {
       await db.runAsync(
-        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index, side)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         templateId,
         g.exercise_id,
         g.count,
         g.reps,
         g.weight,
-        i++
+        i++,
+        g.side
       );
     }
   });
