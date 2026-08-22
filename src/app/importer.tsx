@@ -21,7 +21,7 @@ import {
   importStrongWorkouts,
   type ImportStats,
 } from '@/db/queries';
-import type { Exercise } from '@/db/types';
+import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from '@/db/types';
 import { parseStrongCsv, type ParsedWorkout } from '@/lib/strong-csv';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -60,6 +60,9 @@ export default function ImportScreen() {
   const [unmatched, setUnmatched] = useState<string[]>([]);
   /** nom CSV -> id d'exercice existant (absent = créer un nouvel exercice). */
   const [overrides, setOverrides] = useState<Record<string, number>>({});
+  /** nom CSV -> groupe musculaire pour les nouveaux exercices créés à l'import. */
+  const [newMuscles, setNewMuscles] = useState<Record<string, Muscle>>({});
+  const [musclePickName, setMusclePickName] = useState<string | null>(null);
   const [exerciseList, setExerciseList] = useState<Exercise[]>([]);
   const [mappingName, setMappingName] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -128,11 +131,12 @@ export default function ImportScreen() {
     if (!parsed) return;
     setBusy(true);
     try {
-      const s = await importStrongWorkouts(db, parsed, overrides);
+      const s = await importStrongWorkouts(db, parsed, overrides, newMuscles);
       setStats(s);
       setParsed(null);
       setUnmatched([]);
       setOverrides({});
+      setNewMuscles({});
       setFileName(null);
       setError(null);
     } catch (e) {
@@ -149,13 +153,16 @@ export default function ImportScreen() {
 
   function chooseExercise(id: number | null) {
     if (!mappingName) return;
+    const name = mappingName;
     setOverrides((prev) => {
       const next = { ...prev };
-      if (id === null) delete next[mappingName];
-      else next[mappingName] = id;
+      if (id === null) delete next[name];
+      else next[name] = id;
       return next;
     });
     setMappingName(null);
+    // Nouvel exercice : on demande directement son groupe musculaire cible
+    if (id === null) setMusclePickName(name);
   }
 
   return (
@@ -193,29 +200,39 @@ export default function ImportScreen() {
                   Nouveaux exercices ({unmatched.length})
                 </Text>
                 <Text style={{ color: colors.textSecondary }}>
-                  Associe-les à un exercice existant si besoin, sinon ils seront créés.
+                  Associe-les à un exercice existant ou choisis leur groupe musculaire, sinon ils
+                  seront créés en Full body.
                 </Text>
                 {unmatched.map((name) => {
                   const target = overrides[name] ? exerciseById.get(overrides[name]) : null;
                   return (
-                    <Pressable
-                      key={name}
-                      style={styles.matchRow}
-                      onPress={() => openMapping(name)}>
-                      <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
-                        {name}
-                      </Text>
-                      <Text
-                        style={{
-                          color: target ? '#30D158' : colors.textSecondary,
-                          fontWeight: '600',
-                          maxWidth: '50%',
-                          textAlign: 'right',
-                        }}
-                        numberOfLines={1}>
-                        {target ? `→ ${target.name} ›` : 'Nouvel exercice ›'}
-                      </Text>
-                    </Pressable>
+                    <View key={name} style={styles.matchRow}>
+                      <Pressable style={{ flex: 1 }} onPress={() => openMapping(name)}>
+                        <Text style={{ color: colors.text }} numberOfLines={1}>
+                          {name}
+                        </Text>
+                        <Text
+                          style={{
+                            color: target ? '#30D158' : colors.textSecondary,
+                            fontWeight: '600',
+                          }}
+                          numberOfLines={1}>
+                          {target ? `→ ${target.name} ›` : 'Nouvel exercice ›'}
+                        </Text>
+                      </Pressable>
+                      {!target && (
+                        <Pressable
+                          style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
+                          onPress={() => {
+                            setSearch('');
+                            setMusclePickName(name);
+                          }}>
+                          <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>
+                            {MUSCLE_LABELS[newMuscles[name] ?? 'fullbody']}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   );
                 })}
               </View>
@@ -287,6 +304,46 @@ export default function ImportScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={musclePickName !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setMusclePickName(null)}>
+        <Pressable
+          style={[styles.modalBackdrop, { backgroundColor: '#0009' }]}
+          onPress={() => setMusclePickName(null)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
+              Groupe musculaire de « {musclePickName} »
+            </Text>
+            <View style={styles.chipWrap}>
+              {MUSCLES.map((m) => {
+                const active =
+                  musclePickName !== null && (newMuscles[musclePickName] ?? 'fullbody') === m;
+                return (
+                  <Pressable
+                    key={m}
+                    style={[
+                      styles.chip,
+                      { borderColor: colors.backgroundSelected },
+                      active && styles.chipActive,
+                    ]}
+                    onPress={() => {
+                      if (!musclePickName) return;
+                      setNewMuscles((prev) => ({ ...prev, [musclePickName]: m }));
+                      setMusclePickName(null);
+                    }}>
+                    <Text style={{ color: active ? '#fff' : colors.text }}>
+                      {MUSCLE_LABELS[m]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -329,4 +386,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 12,
   },
+  muscleChip: {
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  chipActive: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
 });
