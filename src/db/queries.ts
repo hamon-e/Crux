@@ -688,7 +688,9 @@ export async function importStrongWorkouts(
     }[];
   }[],
   /** Association manuelle nom CSV -> id d'exercice existant. */
-  exerciseOverrides: Record<string, number> = {}
+  exerciseOverrides: Record<string, number> = {},
+  /** Groupe musculaire des nouveaux exercices créés (nom CSV -> muscle). */
+  newExerciseMuscles: Record<string, string> = {}
 ): Promise<ImportStats> {
   const stats: ImportStats = { imported: 0, skipped: 0, setsImported: 0, exercisesCreated: 0 };
 
@@ -735,7 +737,7 @@ export async function importStrongWorkouts(
             const result = await txn.runAsync(
               'INSERT INTO exercises (name, muscle, equipment, is_custom) VALUES (?, ?, ?, 1)',
               s.exerciseName,
-              'fullbody',
+              newExerciseMuscles[s.exerciseName] ?? 'fullbody',
               'other'
             );
             ex = { id: result.lastInsertRowId, name: s.exerciseName };
