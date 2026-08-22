@@ -144,7 +144,7 @@ export default function StatsScreen() {
               <Text style={{ color: colors.text, fontWeight: '700' }}>{pr.name}</Text>
               <Text style={{ color: colors.textSecondary }}>{pr.date}</Text>
             </View>
-            {pr.top_weight_left != null && pr.top_weight_right != null ? (
+            {pr.top_weight_left != null && pr.top_weight_right != null && (pr.top_weight_left > 0 || pr.top_weight_right > 0) ? (
               <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-end' }}>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ color: '#007AFF', fontWeight: '800' }}>
@@ -155,6 +155,21 @@ export default function StatsScreen() {
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ color: '#007AFF', fontWeight: '800' }}>
                     {Math.round(pr.top_weight_right)} kg
+                  </Text>
+                  <Text style={{ color: colors.textSecondary }}>Droite</Text>
+                </View>
+              </View>
+            ) : pr.top_weight_left != null && pr.top_weight_right != null ? (
+              <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-end' }}>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#007AFF', fontWeight: '800' }}>
+                    ×{pr.best_set_reps_left ?? 0}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary }}>Gauche</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#007AFF', fontWeight: '800' }}>
+                    ×{pr.best_set_reps_right ?? 0}
                   </Text>
                   <Text style={{ color: colors.textSecondary }}>Droite</Text>
                 </View>

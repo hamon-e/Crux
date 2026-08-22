@@ -4,7 +4,7 @@ import { SEED_EXERCISES } from './seed-exercises';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 10;
+export const DATABASE_VERSION = 11;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -199,7 +199,18 @@ DROP TABLE _catalog;
   }
 
   if (currentDbVersion < 10) {
-    // v10 : cible par série dans les routines (reps et poids propres à chaque série).
+    // v10 : côté (droite/gauche) par entrée de routine pour les exercices
+    // unilatéraux (le même exercice peut apparaître 2 fois : droit puis gauche).
+    // Idempotent : évite l'erreur « duplicate column » si une tentative
+    // précédente a échoué avant la mise à jour de user_version.
+    const teCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(template_exercises)');
+    if (!teCols.some((c) => c.name === 'side')) {
+      await db.execAsync('ALTER TABLE template_exercises ADD COLUMN side TEXT');
+    }
+  }
+
+  if (currentDbVersion < 11) {
+    // v11 : cible par série dans les routines (reps et poids propres à chaque série).
     await db.execAsync(`
 CREATE TABLE IF NOT EXISTS template_sets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

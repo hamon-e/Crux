@@ -73,7 +73,10 @@ export default function RoutineEditorScreen() {
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
             <View style={styles.cardHeader}>
               <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={48} radius={6} />
-              <Text style={[styles.exerciseName, { color: colors.text }]}>{te.exercise.name}</Text>
+              <Text style={[styles.exerciseName, { color: colors.text }]}>
+                {te.exercise.name}
+                {te.side ? ` (${te.side === 'right' ? 'droite' : 'gauche'})` : ''}
+              </Text>
               <Pressable hitSlop={8} onPress={() => void removeTe(te)}>
                 <Text style={{ color: '#FF453A' }}>×</Text>
               </Pressable>
@@ -127,7 +130,7 @@ export default function RoutineEditorScreen() {
             style={[styles.button, { backgroundColor: '#007AFF' }]}
             onPress={async () => {
               await startWorkout(db, detail.id);
-              router.replace('/(tabs)');
+              router.dismissTo('/');
             }}>
             <Text style={styles.buttonText}>Démarrer avec cette routine</Text>
           </Pressable>
