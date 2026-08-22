@@ -91,8 +91,9 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
           continue;
         }
         const info = days.get(keyOf(ms));
-        if (!info) continue;
-        col.push({ key: keyOf(ms), info });
+        // Pas de case pour les jours sans séance : on garde juste un
+        // emplacement vide pour préserver l'alignement du calendrier.
+        col.push(info ? { key: keyOf(ms), info } : null);
       }
       cols.push(col);
     }
@@ -113,9 +114,7 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
             {col.map((cell, j) =>
               cell ? (
                 <DayCell key={cell.key} info={cell.info} maxCount={maxCount} />
-              ) : (
-                <View key={`empty-${j}`} style={styles.cell} />
-              )
+              ) : null
             )}
           </View>
         ))}
