@@ -104,3 +104,9 @@ export interface TemplateExercise {
   order_index: number;
   exercise_name?: string;
 }
+
+export interface ActivityType {
+  id: number;
+  name: string;
+  color: string;
+}
