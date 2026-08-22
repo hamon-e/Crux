@@ -69,7 +69,7 @@ export default function WorkoutDetailScreen() {
 
         {detail.exercises.map((group) => (
           <Pressable
-            key={group.exercise.id}
+            key={`${group.exercise.id}|${group.side ?? ''}`}
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}
             onPress={() => router.push(`/exercice/${group.exercise.id}`)}
             android_ripple={{ color: colors.border }}>
