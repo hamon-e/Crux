@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { ActivityType, Exercise, SetSide, Template, TemplateExercise, Workout, WorkoutSet } from './types';
+import type { Exercise, SeanceType, SetSide, Template, TemplateExercise, Workout, WorkoutSet } from './types';
 import { createExerciseMatcher } from '@/lib/exercise-matching';
 
 // ---------- Exercices ----------
@@ -46,13 +46,13 @@ export async function updateExerciseMuscle(db: SQLiteDatabase, exerciseId: numbe
   await db.runAsync('UPDATE exercises SET muscle = ? WHERE id = ?', muscle, exerciseId);
 }
 
-// ---------- Types d'activité ----------
+// ---------- Types de séance ----------
 
-export async function getActivityTypes(db: SQLiteDatabase): Promise<ActivityType[]> {
-  return db.getAllAsync<ActivityType>('SELECT * FROM activity_types ORDER BY name');
+export async function getSeanceTypes(db: SQLiteDatabase): Promise<SeanceType[]> {
+  return db.getAllAsync<SeanceType>('SELECT * FROM activity_types ORDER BY name');
 }
 
-export async function createActivityType(db: SQLiteDatabase, name: string, color = ''): Promise<number> {
+export async function createSeanceType(db: SQLiteDatabase, name: string, color = ''): Promise<number> {
   const result = await db.runAsync(
     'INSERT INTO activity_types (name, color) VALUES (?, ?)',
     name,
@@ -61,8 +61,8 @@ export async function createActivityType(db: SQLiteDatabase, name: string, color
   return result.lastInsertRowId;
 }
 
-export async function deleteActivityType(db: SQLiteDatabase, activityTypeId: number) {
-  await db.runAsync('DELETE FROM activity_types WHERE id = ?', activityTypeId);
+export async function deleteSeanceType(db: SQLiteDatabase, seanceTypeId: number) {
+  await db.runAsync('DELETE FROM activity_types WHERE id = ?', seanceTypeId);
 }
 
 // ---------- Séances ----------
@@ -135,7 +135,7 @@ async function ensureDurationColumn(db: SQLiteDatabase) {
 }
 
 /** Ajoute directement une séance terminée hors musculation (grimpe, vélo, course…). */
-export async function logActivityWorkout(
+export async function logSeanceWorkout(
   db: SQLiteDatabase,
   name: string,
   durationMin: number,

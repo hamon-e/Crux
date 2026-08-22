@@ -15,20 +15,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import {
-  createActivityType,
-  getActivityTypes,
-  logActivityWorkout,
+  createSeanceType,
+  getSeanceTypes,
+  logSeanceWorkout,
 } from '@/db/queries';
-import type { ActivityType } from '@/db/types';
+import type { SeanceType } from '@/db/types';
 import { ROUTINE_COLORS } from '@/app/(tabs)/plus';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
 
-export default function AddActivityScreen() {
+export default function AddSeanceScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
 
-  const [types, setTypes] = useState<ActivityType[]>([]);
+  const [types, setTypes] = useState<SeanceType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [durationMin, setDurationMin] = useState('60');
   const [notes, setNotes] = useState('');
@@ -39,7 +39,7 @@ export default function AddActivityScreen() {
   const [newColor, setNewColor] = useState(ROUTINE_COLORS[0]);
 
   async function reloadTypes() {
-    setTypes(await getActivityTypes(db));
+    setTypes(await getSeanceTypes(db));
   }
 
   useFocusEffect(
@@ -53,7 +53,7 @@ export default function AddActivityScreen() {
 
   async function handleSave() {
     if (!selectedType) {
-      alert('Champs manquants', 'Choisis un type d’activité ou crée-en un nouveau.');
+      alert('Champs manquants', 'Choisis un type de séance ou crée-en un nouveau.');
       return;
     }
     const mins = parseInt(durationMin, 10);
@@ -63,7 +63,7 @@ export default function AddActivityScreen() {
     }
     setSaving(true);
     try {
-      await logActivityWorkout(db, selectedType.name, mins, notes.trim(), selectedType.color);
+      await logSeanceWorkout(db, selectedType.name, mins, notes.trim(), selectedType.color);
       router.back();
     } catch (e) {
       setSaving(false);
@@ -83,12 +83,12 @@ export default function AddActivityScreen() {
     const name = newName.trim();
     if (!name) return;
     try {
-      const id = await createActivityType(db, name, newColor);
+      const id = await createSeanceType(db, name, newColor);
       await reloadTypes();
       setSelectedTypeId(id);
       setCreateOpen(false);
     } catch {
-      alert('Erreur', 'Un type d’activité porte déjà ce nom.');
+      alert('Erreur', 'Un type de séance porte déjà ce nom.');
     }
   }
 
@@ -96,7 +96,7 @@ export default function AddActivityScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Type d’activité</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Type de séance</Text>
           <View style={[styles.typeList, { backgroundColor: colors.backgroundElement }]}>
             {types.map((type, i) => (
               <Pressable
@@ -168,7 +168,7 @@ export default function AddActivityScreen() {
       <Modal visible={createOpen} animationType="slide" transparent onRequestClose={() => setCreateOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: colors.background }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Nouveau type d’activité</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Nouveau type de séance</Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.backgroundElement, color: colors.text }]}
               placeholder="Nom (ex : Grimpe bloc, Vélo…)"

@@ -22,8 +22,8 @@ export default function RootLayout() {
             options={{ title: 'Ajouter un exercice', presentation: 'modal' }}
           />
           <Stack.Screen
-            name="ajouter-activite"
-            options={{ title: 'Ajouter une activité', presentation: 'modal' }}
+            name="ajouter-seance"
+            options={{ title: 'Ajouter une séance', presentation: 'modal' }}
           />
           <Stack.Screen name="historique/[id]" options={{ title: 'Séance' }} />
           <Stack.Screen name="routines/[id]" options={{ title: 'Routine' }} />

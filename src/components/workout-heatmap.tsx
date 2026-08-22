@@ -105,7 +105,7 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
 
   return (
     <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Activité</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Séances</Text>
       <View style={styles.grid}>
         {weeks.map((col, i) => (
           <View key={i} style={styles.col}>
