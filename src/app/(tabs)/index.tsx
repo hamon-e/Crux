@@ -164,7 +164,7 @@ export default function SessionScreen() {
           <Pressable
             style={[styles.primaryButton, { backgroundColor: '#007AFF' }]}
             onPress={() => router.push('/ajouter-activite')}>
-            <Text style={styles.primaryButtonText}>Ajouter une séance d&apos;activité</Text>
+            <Text style={styles.primaryButtonText}>Ajouter un séance</Text>
           </Pressable>
           <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
             {ACTIVITY_TYPES.slice(0, -1).join(', ').toLowerCase()}…
