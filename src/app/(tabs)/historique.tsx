@@ -12,7 +12,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 
 import {
   getWorkouts,
-  getWorkoutDays,
+  getWorkoutDaysGrouped,
   getCurrentWeekDailyVolume,
 } from '@/db/queries';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,13 +41,7 @@ export default function HistoryScreen() {
       void getWorkouts(db)
         .then((rows) => rows.filter((w) => w.completed === 1))
         .then(setWorkouts);
-      void getWorkoutDays(db).then((rows) => {
-        setDays(
-          new Map(
-            rows.map((r) => [r.day, { count: r.set_count, color: r.color } as DayInfo])
-          )
-        );
-      });
+      void getWorkoutDaysGrouped(db).then(setDays);
       void getCurrentWeekDailyVolume(db).then(setWeekly);
     }, [db])
   );

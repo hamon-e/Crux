@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Svg, Path } from 'react-native-svg';
 
 import { useTheme } from '@/hooks/use-theme';
 
@@ -11,12 +12,60 @@ const FALLBACK_COLOR = '#4a90d9';
 
 export interface DayInfo {
   count: number;
-  color: string;
+  colors: string[];
 }
 
 /** Les dates en base sont au format UTC (toISOString), on travaille donc aussi en UTC ici. */
 function keyOf(ms: number) {
   return new Date(ms).toISOString().slice(0, 10);
+}
+
+/** Quart de cercle (part de camembert) entre deux angles, en radians. */
+function slicePath(size: number, start: number, end: number) {
+  const c = size / 2;
+  const r = c;
+  const x0 = c + r * Math.cos(start);
+  const y0 = c + r * Math.sin(start);
+  const x1 = c + r * Math.cos(end);
+  const y1 = c + r * Math.sin(end);
+  const large = end - start > Math.PI ? 1 : 0;
+  return `M ${c} ${c} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`;
+}
+
+function DayCell({ info, maxCount }: { info: DayInfo; maxCount: number }) {
+  const size = CELL - GAP;
+  const colors = info.colors.filter(Boolean);
+  const base = colors.length ? colors : [FALLBACK_COLOR];
+  const opacity = opacityFor(info.count, maxCount);
+
+  if (base.length <= 1) {
+    return (
+      <View
+        style={[
+          styles.cell,
+          { backgroundColor: base[0], opacity },
+        ]}
+      />
+    );
+  }
+
+  // Plusieurs séances dans la journée : la cellule est découpée en quartiers,
+  // un par séance, coloré avec la couleur de chacune.
+  return (
+    <Svg width={size} height={size} style={{ opacity }}>
+      {base.map((color, i) => (
+        <Path
+          key={i}
+          d={slicePath(
+            size,
+            (i / base.length) * Math.PI * 2 - Math.PI / 2,
+            ((i + 1) / base.length) * Math.PI * 2 - Math.PI / 2
+          )}
+          fill={color}
+        />
+      ))}
+    </Svg>
+  );
 }
 
 export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
@@ -53,13 +102,6 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
     [days]
   );
 
-  function opacity(count: number) {
-    if (count <= maxCount / 4) return 0.35;
-    if (count <= maxCount / 2) return 0.55;
-    if (count <= (maxCount * 3) / 4) return 0.78;
-    return 1;
-  }
-
   return (
     <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
       <Text style={[styles.title, { color: colors.text }]}>Activité</Text>
@@ -68,16 +110,7 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
           <View key={i} style={styles.col}>
             {col.map((cell, j) =>
               cell ? (
-                <View
-                  key={cell.key}
-                  style={[
-                    styles.cell,
-                    {
-                      backgroundColor: cell.info.color || FALLBACK_COLOR,
-                      opacity: opacity(cell.info.count),
-                    },
-                  ]}
-                />
+                <DayCell key={cell.key} info={cell.info} maxCount={maxCount} />
               ) : (
                 <View key={`empty-${j}`} style={styles.cell} />
               )
@@ -87,6 +120,13 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
       </View>
     </View>
   );
+}
+
+function opacityFor(count: number, maxCount: number) {
+  if (count <= maxCount / 4) return 0.35;
+  if (count <= maxCount / 2) return 0.55;
+  if (count <= (maxCount * 3) / 4) return 0.78;
+  return 1;
 }
 
 const styles = StyleSheet.create({

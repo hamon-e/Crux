@@ -139,17 +139,33 @@ export async function logActivityWorkout(
   return result.lastInsertRowId;
 }
 
-/** Jours d'entraînement sur les N derniers mois, avec nb de séries et couleur (pour la heatmap). */
+/** Jours d'entraînement sur les N derniers mois : une entrée par séance (couleur + nb de séries), pour la heatmap. */
 export async function getWorkoutDays(db: SQLiteDatabase, months = 6) {
   return db.getAllAsync<{ day: string; set_count: number; color: string }>(
     `SELECT w.date AS day,
-            SUM(CASE WHEN s.done = 1 THEN 1 ELSE 0 END) AS set_count,
-            COALESCE(NULLIF(MAX(w.color), ''), '') AS color
+            COALESCE(SUM(CASE WHEN s.done = 1 THEN 1 ELSE 0 END), 0) AS set_count,
+            COALESCE(NULLIF(w.color, ''), '') AS color
      FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
      WHERE w.completed = 1 AND w.date >= date('now', ?)
-     GROUP BY w.date ORDER BY w.date`,
+     GROUP BY w.id ORDER BY w.started_at`,
     `-${months} month`
   );
+}
+
+/** Regroupe les séances par jour (la heatmap découpe ensuite la cellule par séance). */
+export async function getWorkoutDaysGrouped(db: SQLiteDatabase, months = 6) {
+  const rows = await getWorkoutDays(db, months);
+  const byDay = new Map<string, { count: number; colors: string[] }>();
+  for (const r of rows) {
+    let entry = byDay.get(r.day);
+    if (!entry) {
+      entry = { count: 0, colors: [] };
+      byDay.set(r.day, entry);
+    }
+    entry.count += r.set_count;
+    entry.colors.push(r.color);
+  }
+  return byDay;
 }
 
 export async function getWorkouts(
