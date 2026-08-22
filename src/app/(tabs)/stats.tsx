@@ -159,12 +159,19 @@ export default function StatsScreen() {
                   <Text style={{ color: colors.textSecondary }}>Droite</Text>
                 </View>
               </View>
-            ) : (
+            ) : pr.top_weight > 0 ? (
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={{ color: '#007AFF', fontWeight: '800' }}>
                   {Math.round(pr.top_weight)} kg
                 </Text>
                 <Text style={{ color: colors.textSecondary }}>Max</Text>
+              </View>
+            ) : (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ color: '#007AFF', fontWeight: '800' }}>
+                  ×{pr.best_set_reps}
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>Reps</Text>
               </View>
             )}
           </Pressable>
