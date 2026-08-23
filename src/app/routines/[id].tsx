@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { ExerciseImage } from '@/components/exercise-image';
+import { ROUTINE_COLORS } from '@/app/(tabs)/plus';
 import {
   deleteTemplate,
   getTemplateDetail,
@@ -12,6 +13,7 @@ import {
   renameTemplate,
   setTemplateExerciseSetCount,
   startWorkout,
+  updateTemplateColor,
   updateTemplateSet,
 } from '@/db/queries';
 import type { Exercise, TemplateExercise, TemplateSet } from '@/db/types';
@@ -39,6 +41,11 @@ export default function RoutineEditorScreen() {
     await getTemplateDetail(db, detail!.id).then(setDetail);
   }
 
+  async function handleColor(color: string) {
+    await updateTemplateColor(db, detail!.id, color);
+    await getTemplateDetail(db, detail!.id).then(setDetail);
+  }
+
   function handleDelete() {
     confirm('Supprimer la routine', 'Cette action est irréversible.', [
       { text: 'Annuler', style: 'cancel' },
@@ -61,6 +68,23 @@ export default function RoutineEditorScreen() {
           defaultValue={detail.name}
           onEndEditing={(e) => handleRename(e.nativeEvent.text)}
         />
+
+        <View style={styles.colorRow}>
+          {ROUTINE_COLORS.map((c) => (
+            <Pressable
+              key={c}
+              style={[
+                styles.colorSwatch,
+                {
+                  backgroundColor: c,
+                  borderWidth: (detail.color || ROUTINE_COLORS[0]) === c ? 3 : 0,
+                  borderColor: colors.text,
+                },
+              ]}
+              onPress={() => void handleColor(c)}
+            />
+          ))}
+        </View>
 
         {detail.exercises.length === 0 && (
           <Text style={{ color: colors.textSecondary }}>
@@ -200,6 +224,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 24, gap: 12 },
   nameInput: { fontSize: 26, fontWeight: '800' },
+  colorRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 4 },
+  colorSwatch: { width: 32, height: 32, borderRadius: 16 },
   card: {
     borderRadius: 14,
     padding: 16,
