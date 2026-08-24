@@ -131,26 +131,30 @@ export async function startWorkout(db: SQLiteDatabase, templateId?: number): Pro
         );
         if (tSets.length > 0) {
           for (const [s, ts] of tSets.entries()) {
+            const timed = te.set_type === 'time';
             await db.runAsync(
-              `INSERT INTO sets (workout_id, exercise_id, weight, reps, set_order, side)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO sets (workout_id, exercise_id, weight, reps, duration, set_order, side)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
               workoutId,
               te.exercise_id,
-              ts.target_weight ?? 0,
-              ts.target_reps,
+              timed ? 0 : (ts.target_weight ?? 0),
+              timed ? 0 : ts.target_reps,
+              timed ? (ts.target_seconds ?? 0) : null,
               i * 100 + s,
               te.side ?? null
             );
           }
         } else {
+          const timed = te.set_type === 'time';
           for (let s = 0; s < te.target_sets; s++) {
             await db.runAsync(
-              `INSERT INTO sets (workout_id, exercise_id, weight, reps, set_order, side)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO sets (workout_id, exercise_id, weight, reps, duration, set_order, side)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
               workoutId,
               te.exercise_id,
-              te.target_weight ?? 0,
-              te.target_reps,
+              timed ? 0 : (te.target_weight ?? 0),
+              timed ? 0 : te.target_reps,
+              timed ? (te.target_seconds ?? 0) : null,
               i * 100 + s,
               te.side ?? null
             );
@@ -328,19 +332,20 @@ export async function duplicateWorkout(db: SQLiteDatabase, workoutId: number): P
     );
     newId = result.lastInsertRowId;
     const rows = await db.getAllAsync<
-      Pick<WorkoutSet, 'exercise_id' | 'weight' | 'reps' | 'set_order' | 'superset_group' | 'side'>
+      Pick<WorkoutSet, 'exercise_id' | 'weight' | 'reps' | 'duration' | 'set_order' | 'superset_group' | 'side'>
     >(
-      'SELECT exercise_id, weight, reps, set_order, superset_group, side FROM sets WHERE workout_id = ? ORDER BY set_order',
+      'SELECT exercise_id, weight, reps, duration, set_order, superset_group, side FROM sets WHERE workout_id = ? ORDER BY set_order',
       workoutId
     );
     for (const r of rows) {
       await db.runAsync(
-        `INSERT INTO sets (workout_id, exercise_id, weight, reps, set_order, superset_group, side)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sets (workout_id, exercise_id, weight, reps, duration, set_order, superset_group, side)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         newId,
         r.exercise_id,
         r.weight,
         r.reps,
+        r.duration,
         r.set_order,
         r.superset_group,
         r.side
@@ -366,25 +371,26 @@ export async function addSet(
     exerciseId,
     side
   );
-  const lastSet = await db.getFirstAsync<{ weight: number; reps: number }>(
-    'SELECT weight, reps FROM sets WHERE workout_id = ? AND exercise_id = ? AND side IS ? ORDER BY set_order DESC LIMIT 1',
+  const lastSet = await db.getFirstAsync<{ weight: number; reps: number; duration: number | null }>(
+    'SELECT weight, reps, duration FROM sets WHERE workout_id = ? AND exercise_id = ? AND side IS ? ORDER BY set_order DESC LIMIT 1',
     workoutId,
     exerciseId,
     side
   );
   const result = await db.runAsync(
-    'INSERT INTO sets (workout_id, exercise_id, weight, reps, set_order, side) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO sets (workout_id, exercise_id, weight, reps, duration, set_order, side) VALUES (?, ?, ?, ?, ?, ?, ?)',
     workoutId,
     exerciseId,
     lastSet?.weight ?? weight,
     lastSet?.reps ?? reps,
+    lastSet?.duration ?? null,
     (row?.max_order ?? -1) + 1,
     side
   );
   return result.lastInsertRowId;
 }
 
-export type SetUpdates = Partial<Pick<WorkoutSet, 'weight' | 'reps' | 'rpe' | 'done' | 'superset_group'>>;
+export type SetUpdates = Partial<Pick<WorkoutSet, 'weight' | 'reps' | 'duration' | 'rpe' | 'done' | 'superset_group'>>;
 
 export async function updateSet(db: SQLiteDatabase, setId: number, updates: SetUpdates) {
   const fields: string[] = [];
@@ -453,7 +459,7 @@ export async function getTemplateDetail(db: SQLiteDatabase, templateId: number) 
 /** Garantit une ligne par série pour un exercice de routine (amorce depuis les cibles uniformes si besoin). */
 async function ensureTemplateSets(
   db: SQLiteDatabase,
-  te: Pick<TemplateExercise, 'id' | 'target_sets' | 'target_reps' | 'target_weight'>
+  te: Pick<TemplateExercise, 'id' | 'target_sets' | 'target_reps' | 'target_weight' | 'set_type' | 'target_seconds'>
 ): Promise<TemplateSet[]> {
   let sets = await db.getAllAsync<TemplateSet>(
     'SELECT * FROM template_sets WHERE template_exercise_id = ? ORDER BY set_index',
@@ -462,11 +468,12 @@ async function ensureTemplateSets(
   if (sets.length === 0) {
     for (let i = 0; i < te.target_sets; i++) {
       await db.runAsync(
-        'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight) VALUES (?, ?, ?, ?)',
+        'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight, target_seconds) VALUES (?, ?, ?, ?, ?)',
         te.id,
         i,
         te.target_reps,
-        te.target_weight
+        te.target_weight,
+        te.target_seconds ?? 0
       );
     }
     sets = await db.getAllAsync<TemplateSet>(
@@ -489,31 +496,36 @@ export async function setTemplateExerciseSetCount(
       templateExerciseId
     );
     if (current.length === 0) {
-      const te = await db.getFirstAsync<Pick<TemplateExercise, 'id' | 'target_sets' | 'target_reps' | 'target_weight'>>(
-        'SELECT id, target_sets, target_reps, target_weight FROM template_exercises WHERE id = ?',
+      const te = await db.getFirstAsync<
+        Pick<TemplateExercise, 'id' | 'target_sets' | 'target_reps' | 'target_weight' | 'set_type' | 'target_seconds'>
+      >(
+        'SELECT id, target_sets, target_reps, target_weight, set_type, target_seconds FROM template_exercises WHERE id = ?',
         templateExerciseId
       );
       if (!te) throw new Error('template exercise not found');
       const lastReps = te.target_reps;
       const lastWeight = te.target_weight;
+      const lastSeconds = te.set_type === 'time' ? (te.target_seconds || 30) : 0;
       for (let i = 0; i < count; i++) {
         await db.runAsync(
-          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight) VALUES (?, ?, ?, ?)',
+          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight, target_seconds) VALUES (?, ?, ?, ?, ?)',
           templateExerciseId,
           i,
           lastReps,
-          lastWeight
+          lastWeight,
+          lastSeconds
         );
       }
     } else if (count > current.length) {
       const last = current[current.length - 1];
       for (let i = current.length; i < count; i++) {
         await db.runAsync(
-          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight) VALUES (?, ?, ?, ?)',
+          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight, target_seconds) VALUES (?, ?, ?, ?, ?)',
           templateExerciseId,
           i,
           last.target_reps,
-          last.target_weight
+          last.target_weight,
+          last.target_seconds
         );
       }
     } else if (count < current.length) {
@@ -528,7 +540,7 @@ export async function setTemplateExerciseSetCount(
   });
 }
 
-export type TemplateSetUpdates = Partial<Pick<TemplateSet, 'target_reps' | 'target_weight'>>;
+export type TemplateSetUpdates = Partial<Pick<TemplateSet, 'target_reps' | 'target_weight' | 'target_seconds'>>;
 
 export async function updateTemplateSet(
   db: SQLiteDatabase,
@@ -590,7 +602,7 @@ export async function addTemplateExercise(
 }
 
 export type TemplateExerciseUpdates = Partial<
-  Pick<TemplateExercise, 'target_sets' | 'target_reps' | 'target_weight'>
+  Pick<TemplateExercise, 'target_sets' | 'target_reps' | 'target_weight' | 'set_type' | 'target_seconds'>
 >;
 
 export async function updateTemplateExercise(
@@ -599,7 +611,7 @@ export async function updateTemplateExercise(
   updates: TemplateExerciseUpdates
 ) {
   const fields: string[] = [];
-  const params: number[] = [];
+  const params: (string | number)[] = [];
   for (const [key, value] of Object.entries(updates)) {
     fields.push(`${key} = ?`);
     params.push(value as number);
@@ -623,11 +635,12 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
       exercise_id: number;
       weight: number;
       reps: number;
+      duration: number | null;
       set_order: number;
       side: SetSide | null;
       done: number;
     }>(
-      'SELECT exercise_id, weight, reps, set_order, side, done FROM sets WHERE workout_id = ? ORDER BY set_order, id',
+      'SELECT exercise_id, weight, reps, duration, set_order, side, done FROM sets WHERE workout_id = ? ORDER BY set_order, id',
       workoutId
     );
     // Séance vide : on ne touche pas à la routine plutôt que de la vider.
@@ -637,7 +650,7 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
       exercise_id: number;
       side: SetSide | null;
       order: number;
-      sets: { weight: number; reps: number }[];
+      sets: { weight: number; reps: number; duration: number | null }[];
       doneCount: number;
     }
     const groups = new Map<string, Group>();
@@ -648,7 +661,7 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
         g = { exercise_id: r.exercise_id, side: r.side ?? null, order: r.set_order, sets: [], doneCount: 0 };
         groups.set(key, g);
       }
-      g.sets.push({ weight: r.weight, reps: r.reps });
+      g.sets.push({ weight: r.weight, reps: r.reps, duration: r.duration });
       if (r.done === 1) g.doneCount++;
     }
     await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
@@ -659,25 +672,29 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
     for (const g of sorted) {
       const used = g.doneCount > 0 ? g.sets.slice(-g.doneCount) : g.sets;
       const last = used[used.length - 1];
+      const timed = used.every((s) => s.duration !== null && s.duration !== undefined);
       const result = await db.runAsync(
-        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index, side)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, set_type, target_seconds, order_index, side)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         templateId,
         g.exercise_id,
         used.length,
         last.reps,
         last.weight,
+        timed ? 'time' : 'reps',
+        timed ? (last.duration ?? 0) : 0,
         i++,
         g.side
       );
       const teId = result.lastInsertRowId;
       for (const [s, st] of used.entries()) {
         await db.runAsync(
-          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight) VALUES (?, ?, ?, ?)',
+          'INSERT INTO template_sets (template_exercise_id, set_index, target_reps, target_weight, target_seconds) VALUES (?, ?, ?, ?, ?)',
           teId,
           s,
           st.reps,
-          st.weight
+          st.weight,
+          st.duration ?? 0
         );
       }
     }

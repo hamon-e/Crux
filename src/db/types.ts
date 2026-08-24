@@ -72,12 +72,17 @@ export interface Workout {
 
 export type SetSide = 'left' | 'right';
 
+/** Mode de comptage d'un exercice : répétitions ou temps (secondes). */
+export type SetType = 'reps' | 'time';
+
 export interface WorkoutSet {
   id: number;
   workout_id: number;
   exercise_id: number;
   weight: number;
   reps: number;
+  /** Exercice chronométré : durée cible/réalisée en secondes (null = basé reps). */
+  duration: number | null;
   rpe: number | null;
   done: number;
   set_order: number;
@@ -101,6 +106,10 @@ export interface TemplateExercise {
   target_sets: number;
   target_reps: number;
   target_weight: number;
+  /** Comptage par répétitions ou par temps. */
+  set_type: SetType;
+  /** Durée cible uniforme (secondes) pour les exercices chronométrés. */
+  target_seconds: number;
   order_index: number;
   /** Exercice unilatéral : côté visé par cette entrée (null = bilatéral). */
   side: SetSide | null;
@@ -113,6 +122,8 @@ export interface TemplateSet {
   set_index: number;
   target_reps: number;
   target_weight: number;
+  /** Durée cible (secondes) pour les exercices chronométrés. */
+  target_seconds: number;
 }
 
 export interface SeanceType {

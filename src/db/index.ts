@@ -4,7 +4,7 @@ import { SEED_EXERCISES } from './seed-exercises';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 11;
+export const DATABASE_VERSION = 12;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -238,6 +238,27 @@ CREATE INDEX IF NOT EXISTS idx_template_sets_te ON template_sets(template_exerci
           te.target_weight
         );
       }
+    }
+  }
+
+  if (currentDbVersion < 12) {
+    // v12 : exercices de routine basés sur des répétitions ou du temps.
+    // Idempotent : évite l'erreur « duplicate column » si une tentative
+    // précédente a échoué avant la mise à jour de user_version.
+    const teCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(template_exercises)');
+    if (!teCols.some((c) => c.name === 'set_type')) {
+      await db.execAsync("ALTER TABLE template_exercises ADD COLUMN set_type TEXT NOT NULL DEFAULT 'reps'");
+    }
+    if (!teCols.some((c) => c.name === 'target_seconds')) {
+      await db.execAsync('ALTER TABLE template_exercises ADD COLUMN target_seconds INTEGER NOT NULL DEFAULT 0');
+    }
+    const tsCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(template_sets)');
+    if (!tsCols.some((c) => c.name === 'target_seconds')) {
+      await db.execAsync('ALTER TABLE template_sets ADD COLUMN target_seconds INTEGER NOT NULL DEFAULT 0');
+    }
+    const setCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(sets)');
+    if (!setCols.some((c) => c.name === 'duration')) {
+      await db.execAsync('ALTER TABLE sets ADD COLUMN duration INTEGER');
     }
   }
 
