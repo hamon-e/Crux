@@ -95,7 +95,11 @@ export default function AddSeanceScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag">
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Type de séance</Text>
           <View style={[styles.typeList, { backgroundColor: colors.backgroundElement }]}>
             {types.map((type, i) => (
