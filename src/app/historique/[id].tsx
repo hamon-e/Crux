@@ -104,21 +104,24 @@ export default function WorkoutDetailScreen() {
 }
 
 function SetLine({ index, set }: { index: number; set: WorkoutSet }) {
+  const colors = useTheme();
   if (set.duration !== null && set.duration !== undefined) {
     return (
       <View style={styles.setLine}>
-        <Text style={{ color: '#888', width: 20 }}>{index}</Text>
-        <Text>{set.duration} s</Text>
+        <Text style={{ color: colors.textSecondary, width: 20 }}>{index}</Text>
+        <Text style={{ color: colors.text }}>{set.duration} s</Text>
       </View>
     );
   }
   return (
     <View style={styles.setLine}>
-      <Text style={{ color: '#888', width: 20 }}>{index}</Text>
-      <Text>{set.weight > 0 ? `${set.weight} kg` : 'Poids du corps'}</Text>
-      <Text> × {set.reps} reps</Text>
+      <Text style={{ color: colors.textSecondary, width: 20 }}>{index}</Text>
+      <Text style={{ color: colors.text }}>
+        {set.weight > 0 ? `${set.weight} kg` : 'Poids du corps'}
+      </Text>
+      <Text style={{ color: colors.text }}> × {set.reps} reps</Text>
       {set.weight > 0 && set.reps > 0 && (
-        <Text style={{ color: '#888', marginLeft: 8 }}>
+        <Text style={{ color: colors.textSecondary, marginLeft: 8 }}>
           (1RM ≈ {Math.round(estimate1rm(set.weight, set.reps))} kg)
         </Text>
       )}
