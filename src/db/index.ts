@@ -6,7 +6,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 15;
+export const DATABASE_VERSION = 13;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -38,6 +38,11 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await ensureColumn('sets', 'side', 'TEXT');
   await ensureColumn('template_exercises', 'target_weight', 'REAL NOT NULL DEFAULT 0');
   await ensureColumn('template_exercises', 'side', 'TEXT');
+  // Exercices chronométrés (branche main) : garanties sur toutes les bases.
+  await ensureColumn('template_exercises', 'set_type', "TEXT NOT NULL DEFAULT 'reps'");
+  await ensureColumn('template_exercises', 'target_seconds', 'INTEGER NOT NULL DEFAULT 0');
+  await ensureColumn('template_sets', 'target_seconds', 'INTEGER NOT NULL DEFAULT 0');
+  await ensureColumn('sets', 'duration', 'INTEGER');
   await db.execAsync(`
 CREATE TABLE IF NOT EXISTS exercises (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -318,11 +323,29 @@ CREATE INDEX IF NOT EXISTS idx_template_sets_te ON template_sets(template_exerci
   }
 
   if (currentDbVersion < 12) {
-    // v12 : le catalogue est remplacé par les compétences de la feuille de
+    // v12 (main) : exercices de routine basés sur des répétitions ou du temps.
+    const teCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(template_exercises)');
+    if (!teCols.some((c) => c.name === 'set_type')) {
+      await db.execAsync("ALTER TABLE template_exercises ADD COLUMN set_type TEXT NOT NULL DEFAULT 'reps'");
+    }
+    if (!teCols.some((c) => c.name === 'target_seconds')) {
+      await db.execAsync('ALTER TABLE template_exercises ADD COLUMN target_seconds INTEGER NOT NULL DEFAULT 0');
+    }
+    const tsCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(template_sets)');
+    if (!tsCols.some((c) => c.name === 'target_seconds')) {
+      await db.execAsync('ALTER TABLE template_sets ADD COLUMN target_seconds INTEGER NOT NULL DEFAULT 0');
+    }
+    const setCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(sets)');
+    if (!setCols.some((c) => c.name === 'duration')) {
+      await db.execAsync('ALTER TABLE sets ADD COLUMN duration INTEGER');
+    }
+  }
+
+  if (currentDbVersion < 13) {
+    // v13 : le catalogue est remplacé par les compétences de la feuille de
     // calcul (Google Sheets) + colonnes catégorie/difficulté pour l'arbre de
     // compétences. Les exercices personnalisés et ceux référencés par
     // l'historique sont conservés.
-    // Nettoyage des exercices de l'ancien catalogue non référencés.
     await db.execAsync(`
 DELETE FROM exercises
 WHERE is_custom = 0 AND COALESCE(category, '') = ''
@@ -359,7 +382,7 @@ DROP TABLE _catalog;
     });
   }
 
-  // v13/v14 : synchronisation des étapes de progression (avec images) et des
+  // v14+ : synchronisation des étapes de progression (avec images) et des
   // vidéos démo Google Drive. Refaite à chaque lancement de migration :
   // idempotente et auto-réparatrice (répare les bases à moitié migrées).
   const skills = await db.getAllAsync<{ id: number; name: string }>(
