@@ -35,6 +35,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await ensureColumn('exercises', 'difficulty', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'video_url', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'image', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'video', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('sets', 'side', 'TEXT');
@@ -54,7 +55,8 @@ CREATE TABLE IF NOT EXISTS exercises (
   is_custom INTEGER NOT NULL DEFAULT 0,
   category TEXT NOT NULL DEFAULT '',
   difficulty TEXT NOT NULL DEFAULT '',
-  video_url TEXT NOT NULL DEFAULT ''
+  video_url TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS exercise_steps (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,9 +184,14 @@ DROP TABLE _catalog;
 
   if (currentDbVersion < 4) {
     // v4 : poids cible par exercice dans les routines (0 = non défini).
-    await db.execAsync(
-      'ALTER TABLE template_exercises ADD COLUMN target_weight REAL NOT NULL DEFAULT 0'
-    );
+    // Idempotent : évite l'erreur « duplicate column » si une tentative
+    // précédente a échoué avant la mise à jour de user_version.
+    const cols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(template_exercises)');
+    if (!cols.some((c) => c.name === 'target_weight')) {
+      await db.execAsync(
+        'ALTER TABLE template_exercises ADD COLUMN target_weight REAL NOT NULL DEFAULT 0'
+      );
+    }
   }
 
   if (currentDbVersion < 5) {
