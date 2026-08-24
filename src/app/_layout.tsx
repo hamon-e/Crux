@@ -35,6 +35,8 @@ export default function RootLayout() {
           <Stack.Screen name="historique/[id]" options={{ title: 'Séance' }} />
           <Stack.Screen name="routines/[id]" options={{ title: 'Routine' }} />
           <Stack.Screen name="exercice/[id]" options={{ title: 'Exercice' }} />
+          <Stack.Screen name="progression/[id]" options={{ title: 'Progression' }} />
+          <Stack.Screen name="etapes/[id]" options={{ title: 'Détail de la progression' }} />
           <Stack.Screen name="export" options={{ title: 'Export' }} />
           <Stack.Screen name="importer" options={{ title: 'Importer' }} />
         </Stack>

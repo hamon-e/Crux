@@ -55,6 +55,11 @@ export interface Exercise {
   muscle: string;
   equipment: string;
   is_custom: number;
+  /** Vidéo démo Google Drive (compétences de la spreadsheet). */
+  video_url?: string;
+  /** Catégorie / difficulté (compétences de la spreadsheet uniquement). */
+  category?: string;
+  difficulty?: string;
 }
 
 export interface Workout {

@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import {
+  Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,9 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { SIDE_LABELS } from '@/components/workout-exercise-card';
-import { getExerciseById, getExerciseHistory, updateExerciseMuscle } from '@/db/queries';
+import { getExerciseById, getExerciseHistory, getExerciseSteps, updateExerciseMuscle } from '@/db/queries';
 import { MUSCLES, MUSCLE_LABELS } from '@/db/types';
 import { ExerciseImage } from '@/components/exercise-image';
+import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
@@ -30,6 +33,7 @@ export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [exercise, setExercise] = useState<Awaited<ReturnType<typeof getExerciseById>>>(null);
   const [history, setHistory] = useState<History>([]);
+  const [coverImage, setCoverImage] = useState<ReturnType<typeof getStepImageSource>>(null);
   const [muscleOpen, setMuscleOpen] = useState(false);
 
   useFocusEffect(
@@ -37,6 +41,9 @@ export default function ExerciseScreen() {
       void (async () => {
         setExercise(await getExerciseById(db, Number(id)));
         setHistory(await getExerciseHistory(db, Number(id)));
+        getExerciseSteps(db, Number(id))
+          .then((steps) => setCoverImage(getStepImageSource(steps.find((s) => s.image)?.image)))
+          .catch((e) => console.warn('Impossible de lire les étapes', e));
       })();
     }, [db, id])
   );
@@ -52,10 +59,29 @@ export default function ExerciseScreen() {
     setExercise({ ...exercise!, muscle });
   }
 
+  function openMedia() {
+    const url = exercise?.video_url;
+    if (url) void Linking.openURL(url);
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <ExerciseImage name={exercise.name} muscle={exercise.muscle} fullWidth radius={14} />
+        <Pressable onPress={openMedia} disabled={!exercise.video_url}>
+          {coverImage ? (
+            <View>
+              <Image source={coverImage} style={styles.hero} resizeMode="cover" />
+              {!!exercise.video_url && (
+                <View style={styles.playBadge}>
+                  <Text style={styles.playIcon}>▶</Text>
+                  <Text style={styles.playLabel}>Voir la vidéo</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <ExerciseImage name={exercise.name} muscle={exercise.muscle} fullWidth radius={14} />
+          )}
+        </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>{exercise.name}</Text>
         <Pressable onPress={() => setMuscleOpen(true)}>
           <Text style={{ color: colors.textSecondary }}>
@@ -153,6 +179,26 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 24, gap: 12 },
   title: { fontSize: 26, fontWeight: '800' },
+  hero: {
+    width: '100%',
+    height: 210,
+    borderRadius: 14,
+    backgroundColor: '#0001',
+  },
+  playBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#000a',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  playIcon: { color: '#fff', fontSize: 13 },
+  playLabel: { color: '#fff', fontWeight: '700', fontSize: 13 },
   card: { borderRadius: 14, padding: 16 },
   chartRow: {
     flexDirection: 'row',
