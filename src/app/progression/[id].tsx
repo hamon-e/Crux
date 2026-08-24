@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { getExerciseSteps, getSkillExercises } from '@/db/queries';
+import { getExerciseSteps, getSkillExercises, validateExerciseManually } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -24,6 +24,8 @@ export default function ProgressionScreen() {
   const exerciseId = Number(id);
   const [nodes, setNodes] = useState<SkillNode[]>([]);
   const [stepsOpen, setStepsOpen] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [validating, setValidating] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,8 +37,23 @@ export default function ProgressionScreen() {
           console.warn('Progression : impossible de lire les compétences', e);
         }
       })();
-    }, [db])
+      // refreshKey force le rechargement après une validation manuelle.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [db, refreshKey])
   );
+
+  async function handleManualValidate(exerciseId: number) {
+    if (validating) return;
+    try {
+      setValidating(true);
+      await validateExerciseManually(db, exerciseId);
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      console.warn('Progression : validation manuelle impossible', e);
+    } finally {
+      setValidating(false);
+    }
+  }
 
   const current = nodes.find((n) => n.id === exerciseId);
 
@@ -142,6 +159,16 @@ export default function ProgressionScreen() {
           {node.sessions}/{MASTERY_SESSIONS} séances validées
           {node.mastered ? ' — maîtrisée !' : ''}
         </Text>
+        {!node.mastered && (
+          <Pressable
+            style={[styles.detailButton, { borderColor: TIER_COLORS[node.tier], opacity: validating ? 0.5 : 1 }]}
+            onPress={() => void handleManualValidate(node.id)}
+            disabled={validating}>
+            <Text style={{ color: TIER_COLORS[node.tier], fontWeight: '700' }}>
+              {validating ? 'Validation…' : '✓ Valider une séance'}
+            </Text>
+          </Pressable>
+        )}
         <StepsList exerciseId={node.id} tierColor={TIER_COLORS[node.tier]} />
       </View>
     );
