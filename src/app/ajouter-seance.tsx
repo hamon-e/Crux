@@ -21,6 +21,7 @@ import {
 } from '@/db/queries';
 import type { SeanceType } from '@/db/types';
 import { ROUTINE_COLORS } from '@/app/(tabs)/plus';
+import { PastDatePickerModal, formatFrDate, todayISO } from '@/components/past-date-picker';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
 
@@ -33,6 +34,8 @@ export default function AddSeanceScreen() {
   const [durationMin, setDurationMin] = useState('60');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [date, setDate] = useState(todayISO());
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -63,7 +66,7 @@ export default function AddSeanceScreen() {
     }
     setSaving(true);
     try {
-      await logSeanceWorkout(db, selectedType.name, mins, notes.trim(), selectedType.color);
+      await logSeanceWorkout(db, selectedType.name, mins, notes.trim(), selectedType.color, date);
       router.back();
     } catch (e) {
       setSaving(false);
@@ -126,6 +129,19 @@ export default function AddSeanceScreen() {
               <Text style={{ color: '#007AFF', fontWeight: '600', fontSize: 15 }}>+ Créer un nouveau type</Text>
             </Pressable>
           </View>
+
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Date</Text>
+          <Pressable
+            style={[
+              styles.dateRow,
+              { backgroundColor: colors.backgroundElement },
+            ]}
+            onPress={() => setDatePickerOpen(true)}>
+            <Text style={{ color: colors.text, fontSize: 16 }}>
+              {date === todayISO() ? "Aujourd'hui" : formatFrDate(date)}
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>Modifier</Text>
+          </Pressable>
 
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Durée</Text>
           <View style={styles.durationRow}>
@@ -208,6 +224,17 @@ export default function AddSeanceScreen() {
           </View>
         </View>
       </Modal>
+
+      <PastDatePickerModal
+        visible={datePickerOpen}
+        value={date}
+        title="Date de la séance"
+        onClose={() => setDatePickerOpen(false)}
+        onConfirm={(d) => {
+          setDate(d);
+          setDatePickerOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -282,6 +309,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  dateRow: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   durationInput: {
     borderRadius: 12,

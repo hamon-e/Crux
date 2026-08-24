@@ -71,6 +71,12 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Timestamp (midi local) d'un jour au format YYYY-MM-DD. */
+function dayTimestamp(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0).getTime();
+}
+
 /** Deux exos identiques mis à la suite dans une routine = faire les 2 côtés :
  *  la première entrée devient « droit », la suivante « gauche ». */
 function assignConsecutiveSides<T extends { exercise_id: number; side: SetSide | null }>(
@@ -99,9 +105,12 @@ function assignConsecutiveSides<T extends { exercise_id: number; side: SetSide |
   }
 }
 
-export async function startWorkout(db: SQLiteDatabase, templateId?: number): Promise<number> {
+export async function startWorkout(db: SQLiteDatabase, templateId?: number, date?: string): Promise<number> {
   let workoutId = 0;
   await db.withTransactionAsync(async () => {
+    const day = date ?? today();
+    // Séance rétroactive : on ancre le début au midi du jour choisi.
+    const startedAt = day === today() ? Date.now() : dayTimestamp(day);
     let name = '';
     let color = '';
     if (templateId) {
@@ -118,8 +127,8 @@ export async function startWorkout(db: SQLiteDatabase, templateId?: number): Pro
           `INSERT INTO workouts (name, date, started_at, completed, template_id, color)
            VALUES (?, ?, ?, 0, ?, ?)`,
           name,
-          today(),
-          Date.now(),
+          day,
+          startedAt,
           templateId,
           color
         );
@@ -165,8 +174,8 @@ export async function startWorkout(db: SQLiteDatabase, templateId?: number): Pro
       const result = await db.runAsync(
         'INSERT INTO workouts (name, date, started_at, completed) VALUES (?, ?, ?, 0)',
         '',
-        today(),
-        Date.now()
+        day,
+        startedAt
       );
       workoutId = result.lastInsertRowId;
     }
@@ -194,22 +203,37 @@ export async function logSeanceWorkout(
   name: string,
   durationMin: number,
   notes = '',
-  color = ''
+  color = '',
+  date?: string
 ): Promise<number> {
   await ensureDurationColumn(db);
-  const now = Date.now();
+  const day = date ?? today();
+  // Séance passée : la fin est ancrée au midi du jour choisi.
+  const endedAt = day === today() ? Date.now() : dayTimestamp(day);
   const result = await db.runAsync(
     `INSERT INTO workouts (name, date, started_at, ended_at, completed, duration_min, notes, color)
      VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
     name,
-    today(),
-    now - durationMin * 60000,
-    now,
+    day,
+    endedAt - durationMin * 60000,
+    endedAt,
     durationMin,
     notes,
     color
   );
   return result.lastInsertRowId;
+}
+
+/** Valide rétroactivement une routine comme séance terminée à une date passée. */
+export async function validateRoutineOnDate(
+  db: SQLiteDatabase,
+  templateId: number,
+  date: string
+): Promise<number> {
+  const workoutId = await startWorkout(db, templateId, date);
+  await db.runAsync('UPDATE sets SET done = 1 WHERE workout_id = ?', workoutId);
+  await finishWorkout(db, workoutId, undefined, dayTimestamp(date));
+  return workoutId;
 }
 
 /** Jours d'entraînement sur les N derniers mois : une entrée par séance (couleur + nb de séries), pour la heatmap. */
@@ -299,10 +323,15 @@ export async function getWorkoutDetail(db: SQLiteDatabase, workoutId: number): P
   return { ...workout, exercises: [...byExercise.values()] };
 }
 
-export async function finishWorkout(db: SQLiteDatabase, workoutId: number, notes?: string) {
+export async function finishWorkout(
+  db: SQLiteDatabase,
+  workoutId: number,
+  notes?: string,
+  endedAt?: number
+) {
   await db.runAsync(
     'UPDATE workouts SET completed = 1, ended_at = ?, notes = COALESCE(?, notes) WHERE id = ?',
-    Date.now(),
+    endedAt ?? Date.now(),
     notes ?? null,
     workoutId
   );
