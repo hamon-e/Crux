@@ -430,6 +430,15 @@ export async function getTemplates(db: SQLiteDatabase): Promise<(Template & { ex
   );
 }
 
+/** Réordonne les exercices d'une routine selon l'ordre des ids fourni. */
+export async function reorderTemplateExercises(db: SQLiteDatabase, orderedIds: number[]) {
+  await db.withTransactionAsync(async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.runAsync('UPDATE template_exercises SET order_index = ? WHERE id = ?', i, orderedIds[i]);
+    }
+  });
+}
+
 export async function getTemplateDetail(db: SQLiteDatabase, templateId: number) {
   const template = await db.getFirstAsync<Template>('SELECT * FROM templates WHERE id = ?', templateId);
   if (!template) return null;
