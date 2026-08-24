@@ -1,12 +1,24 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { createTemplate, deleteAllData, getSetting, getTemplates, setSetting } from '@/db/queries';
+import {
+  createTemplate,
+  deleteAllData,
+  getSetting,
+  getTemplates,
+  setSetting,
+} from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
+import {
+  REMINDER_DEFAULT_HOUR,
+  REMINDER_DEFAULT_MINUTE,
+  requestReminderPermission,
+  syncRoutineReminder,
+} from '@/lib/reminders';
 
 export const ROUTINE_COLORS = [
   '#4a90d9',
@@ -26,6 +38,9 @@ export default function MoreScreen() {
   const [newRoutineName, setNewRoutineName] = useState('');
   const [newRoutineColor, setNewRoutineColor] = useState(ROUTINE_COLORS[0]);
   const [restSeconds, setRestSeconds] = useState('90');
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderHour, setReminderHour] = useState(String(REMINDER_DEFAULT_HOUR));
+  const [reminderMinute, setReminderMinute] = useState(String(REMINDER_DEFAULT_MINUTE));
 
   useFocusEffect(
     useCallback(() => {
@@ -33,6 +48,11 @@ export default function MoreScreen() {
         setTemplates(await getTemplates(db));
         const saved = await getSetting(db, 'rest_seconds');
         if (saved) setRestSeconds(saved);
+        setReminderEnabled((await getSetting(db, 'reminder_enabled')) === '1');
+        const h = parseInt((await getSetting(db, 'reminder_hour')) ?? '', 10);
+        const m = parseInt((await getSetting(db, 'reminder_minute')) ?? '', 10);
+        if (!Number.isNaN(h)) setReminderHour(String(h));
+        if (!Number.isNaN(m)) setReminderMinute(String(m));
       })();
     }, [db])
   );
@@ -47,6 +67,32 @@ export default function MoreScreen() {
   async function saveRest() {
     const v = parseInt(restSeconds, 10);
     if (!Number.isNaN(v) && v >= 0) await setSetting(db, 'rest_seconds', String(v));
+  }
+
+  /** Applique le rappel avec les valeurs du formulaire et persiste les réglages. */
+  async function applyReminder(enabled: boolean, hourStr: string, minuteStr: string) {
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+    const validHour = Number.isNaN(hour) ? REMINDER_DEFAULT_HOUR : Math.min(23, Math.max(0, hour));
+    const validMinute = Number.isNaN(minute)
+      ? REMINDER_DEFAULT_MINUTE
+      : Math.min(59, Math.max(0, minute));
+    setReminderHour(String(validHour));
+    setReminderMinute(String(validMinute));
+    await setSetting(db, 'reminder_enabled', enabled ? '1' : '0');
+    await setSetting(db, 'reminder_hour', String(validHour));
+    await setSetting(db, 'reminder_minute', String(validMinute));
+    await syncRoutineReminder(db, enabled, validHour, validMinute);
+  }
+
+  async function toggleReminder(value: boolean) {
+    setReminderEnabled(value);
+    if (value && !(await requestReminderPermission())) {
+      setReminderEnabled(false);
+      await applyReminder(false, reminderHour, reminderMinute);
+      return;
+    }
+    await applyReminder(value, reminderHour, reminderMinute);
   }
 
   function handleDeleteAll() {
@@ -139,6 +185,43 @@ export default function MoreScreen() {
               onEndEditing={() => void saveRest()}
             />
           </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text }}>Rappel routine oubliée</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                Notifie chaque jour si une routine n&apos;a pas été faite depuis 7 jours
+              </Text>
+            </View>
+            <Switch value={reminderEnabled} onValueChange={(v) => void toggleReminder(v)} />
+          </View>
+          {reminderEnabled && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ color: colors.text, flex: 1 }}>Heure du rappel</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { width: 56, color: colors.text, borderColor: colors.backgroundSelected },
+                ]}
+                keyboardType="number-pad"
+                maxLength={2}
+                value={reminderHour}
+                onChangeText={setReminderHour}
+                onEndEditing={() => void applyReminder(true, reminderHour, reminderMinute)}
+              />
+              <Text style={{ color: colors.text }}>:</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { width: 56, color: colors.text, borderColor: colors.backgroundSelected },
+                ]}
+                keyboardType="number-pad"
+                maxLength={2}
+                value={reminderMinute}
+                onChangeText={setReminderMinute}
+                onEndEditing={() => void applyReminder(true, reminderHour, reminderMinute)}
+              />
+            </View>
+          )}
         </View>
 
         <SectionTitle text="Données" color={colors.textSecondary} />
