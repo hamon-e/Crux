@@ -186,7 +186,9 @@ export default function AddSeanceScreen() {
       </KeyboardAvoidingView>
 
       <Modal visible={createOpen} animationType="slide" transparent onRequestClose={() => setCreateOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.modalCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Nouveau type de séance</Text>
             <TextInput
@@ -222,7 +224,7 @@ export default function AddSeanceScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <PastDatePickerModal
