@@ -104,6 +104,14 @@ export default function WorkoutDetailScreen() {
 }
 
 function SetLine({ index, set }: { index: number; set: WorkoutSet }) {
+  if (set.duration !== null && set.duration !== undefined) {
+    return (
+      <View style={styles.setLine}>
+        <Text style={{ color: '#888', width: 20 }}>{index}</Text>
+        <Text>{set.duration} s</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.setLine}>
       <Text style={{ color: '#888', width: 20 }}>{index}</Text>

@@ -17,7 +17,7 @@ interface Props {
   side?: SetSide | null;
   previousTop?: { weight: number; reps: number } | null;
   onAddSet: () => void;
-  onUpdateSet: (setId: number, updates: { weight?: number; reps?: number; done?: number }) => void;
+  onUpdateSet: (setId: number, updates: { weight?: number; reps?: number; duration?: number; done?: number }) => void;
   onDeleteSet?: (setId: number) => void;
   onRemoveExercise?: () => void;
 }
@@ -34,6 +34,8 @@ export function WorkoutExerciseCard({
 }: Props) {
   const colors = useTheme();
   const [expanded, setExpanded] = useState(true);
+  // Exercice chronométré : toutes ses séries portent une durée (secondes).
+  const timed = sets.length > 0 && sets.every((s) => s.duration !== null && s.duration !== undefined);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
@@ -62,8 +64,14 @@ export function WorkoutExerciseCard({
         <>
           <View style={[styles.setRowHeader]}>
             <Text style={[styles.colIndex, { color: colors.textSecondary }]}>#</Text>
-            <Text style={[styles.colInput, { color: colors.textSecondary }]}>Poids (kg)</Text>
-            <Text style={[styles.colInput, { color: colors.textSecondary }]}>Reps</Text>
+            {timed ? (
+              <Text style={[styles.colInput, { color: colors.textSecondary }]}>Durée (s)</Text>
+            ) : (
+              <>
+                <Text style={[styles.colInput, { color: colors.textSecondary }]}>Poids (kg)</Text>
+                <Text style={[styles.colInput, { color: colors.textSecondary }]}>Reps</Text>
+              </>
+            )}
             <Text style={[styles.colDone, { color: colors.textSecondary }]}>✓</Text>
             <View style={styles.colDelete} />
           </View>
@@ -71,32 +79,50 @@ export function WorkoutExerciseCard({
           {sets.map((s, i) => (
             <View key={s.id} style={styles.setRow}>
               <Text style={[styles.colIndex, { color: colors.text }]}>{i + 1}</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.colInput,
-                  { color: colors.text, borderColor: colors.backgroundSelected },
-                ]}
-                keyboardType="decimal-pad"
-                defaultValue={String(s.weight)}
-                onEndEditing={(e) => {
-                  const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
-                  if (!Number.isNaN(v)) onUpdateSet(s.id, { weight: v });
-                }}
-              />
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.colInput,
-                  { color: colors.text, borderColor: colors.backgroundSelected },
-                ]}
-                keyboardType="number-pad"
-                defaultValue={String(s.reps)}
-                onEndEditing={(e) => {
-                  const v = parseInt(e.nativeEvent.text, 10);
-                  if (!Number.isNaN(v)) onUpdateSet(s.id, { reps: v });
-                }}
-              />
+              {timed ? (
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.colInput,
+                    { color: colors.text, borderColor: colors.backgroundSelected },
+                  ]}
+                  keyboardType="number-pad"
+                  defaultValue={String(s.duration ?? 0)}
+                  onEndEditing={(e) => {
+                    const v = parseInt(e.nativeEvent.text, 10);
+                    if (!Number.isNaN(v)) onUpdateSet(s.id, { duration: Math.max(0, v) });
+                  }}
+                />
+              ) : (
+                <>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.colInput,
+                      { color: colors.text, borderColor: colors.backgroundSelected },
+                    ]}
+                    keyboardType="decimal-pad"
+                    defaultValue={String(s.weight)}
+                    onEndEditing={(e) => {
+                      const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
+                      if (!Number.isNaN(v)) onUpdateSet(s.id, { weight: v });
+                    }}
+                  />
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.colInput,
+                      { color: colors.text, borderColor: colors.backgroundSelected },
+                    ]}
+                    keyboardType="number-pad"
+                    defaultValue={String(s.reps)}
+                    onEndEditing={(e) => {
+                      const v = parseInt(e.nativeEvent.text, 10);
+                      if (!Number.isNaN(v)) onUpdateSet(s.id, { reps: v });
+                    }}
+                  />
+                </>
+              )}
               <Pressable
                 style={[styles.doneButton, s.done ? { backgroundColor: '#30D158' } : { borderColor: colors.backgroundSelected, borderWidth: 1.5 }]}
                 onPress={() => onUpdateSet(s.id, { done: s.done ? 0 : 1 })}>
