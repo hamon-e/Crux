@@ -235,6 +235,8 @@ export default function SessionScreen() {
           data={workout.exercises}
           keyExtractor={(item) => `${item.exercise.id}|${item.side ?? ''}`}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 40 }}>
               Ajoute ton premier exercice pour commencer.
