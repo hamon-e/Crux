@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { EXERCISE_IMAGES } from '@/db/exercise-images';
+import { MOBILITY_IMAGES } from '@/db/mobility-images';
 import { useTheme } from '@/hooks/use-theme';
 
 interface Props {
@@ -36,7 +37,7 @@ const FALLBACK_LABELS: Record<string, string> = {
 /** Image d'un exercice (base free-exercise-db, domaine public) avec repli silhouette. */
 export function ExerciseImage({ name, muscle, width, radius = 8, fullWidth, style }: Props) {
   const colors = useTheme();
-  const source = EXERCISE_IMAGES[name] ?? lookupNormalized(name);
+  const source = EXERCISE_IMAGES[name] ?? MOBILITY_IMAGES[name] ?? lookupNormalized(name);
   const sizeStyle = fullWidth
     ? { alignSelf: 'stretch' as const, aspectRatio: 3 / 2 }
     : { width, height: Math.round(((width ?? 0) * 2) / 3) };
@@ -94,7 +95,9 @@ let normalizedIndex: Map<string, number> | null = null;
 function lookupNormalized(name: string): number | undefined {
   if (!normalizedIndex) {
     normalizedIndex = new Map(
-      Object.entries(EXERCISE_IMAGES).map(([key, module]) => [normalizeKey(key), module])
+      [...Object.entries(EXERCISE_IMAGES), ...Object.entries(MOBILITY_IMAGES)].map(
+        ([key, module]) => [normalizeKey(key), module]
+      )
     );
   }
   return normalizedIndex.get(normalizeKey(name));

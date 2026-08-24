@@ -21,7 +21,6 @@ import {
   deleteWorkout,
   finishWorkout,
   getActiveWorkout,
-  getSetting,
   getTemplates,
   getWorkoutDetail,
   startWorkout,
@@ -53,10 +52,13 @@ export default function SessionScreen() {
   const [workout, setWorkout] = useState<WorkoutDetail | null>(null);
   const [templates, setTemplates] = useState<(Template & { exercise_count: number })[]>([]);
   const [elapsed, setElapsed] = useState(0);
-  const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
-  const restInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [chronoRunning, setChronoRunning] = useState(false);
+  const [chronoMs, setChronoMs] = useState(0);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chronoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chronoStart = useRef<number | null>(null);
+  const chronoBase = useRef(0);
 
   const reload = useCallback(async () => {
     const active = await getActiveWorkout(db);
@@ -88,30 +90,36 @@ export default function SessionScreen() {
     };
   }, [workout?.id, workout?.started_at]);
 
-  const stopRest = useCallback(() => {
-    if (restInterval.current) clearInterval(restInterval.current);
-    restInterval.current = null;
-    setRestRemaining(null);
+  const stopChronoInterval = useCallback(() => {
+    if (chronoTimer.current) clearInterval(chronoTimer.current);
+    chronoTimer.current = null;
   }, []);
 
-  useEffect(() => () => stopRest(), [stopRest]);
+  const toggleChrono = useCallback(() => {
+    if (chronoRunning) {
+      if (chronoStart.current !== null) chronoBase.current += Date.now() - chronoStart.current;
+      chronoStart.current = null;
+      stopChronoInterval();
+      setChronoRunning(false);
+    } else {
+      chronoStart.current = Date.now();
+      chronoTimer.current = setInterval(() => {
+        setChronoMs(chronoBase.current + (chronoStart.current !== null ? Date.now() - chronoStart.current : 0));
+      }, 200);
+      setChronoMs(chronoBase.current);
+      setChronoRunning(true);
+    }
+  }, [chronoRunning, stopChronoInterval]);
 
-  const startRest = useCallback(async () => {
-    const saved = await getSetting(db, 'rest_seconds');
-    const seconds = saved ? parseInt(saved, 10) : 90;
-    stopRest();
-    setRestRemaining(seconds);
-    restInterval.current = setInterval(() => {
-      setRestRemaining((r) => {
-        if (r === null || r <= 1) {
-          if (restInterval.current) clearInterval(restInterval.current);
-          restInterval.current = null;
-          return null;
-        }
-        return r - 1;
-      });
-    }, 1000);
-  }, [db, stopRest]);
+  const resetChrono = useCallback(() => {
+    stopChronoInterval();
+    chronoStart.current = null;
+    chronoBase.current = 0;
+    setChronoMs(0);
+    setChronoRunning(false);
+  }, [stopChronoInterval]);
+
+  useEffect(() => () => resetChrono(), [resetChrono]);
 
   async function handleStart(templateId?: number) {
     await startWorkout(db, templateId);
@@ -134,7 +142,7 @@ export default function SessionScreen() {
     if (!workout) return;
     const templateId = workout.template_id;
     setFinishOpen(false);
-    stopRest();
+    resetChrono();
     if (templateId && syncRoutine) {
       await syncTemplateFromWorkout(db, templateId, workout.id);
     }
@@ -151,7 +159,7 @@ export default function SessionScreen() {
         text: 'Abandonner',
         style: 'destructive',
         onPress: async () => {
-          stopRest();
+          resetChrono();
           await deleteWorkout(db, workout.id);
           await reload();
         },
@@ -161,7 +169,6 @@ export default function SessionScreen() {
 
   async function handleUpdateSet(setId: number, updates: SetUpdates & Record<string, unknown>) {
     await updateSet(db, setId, updates as SetUpdates);
-    if ((updates as { done?: number }).done === 1) void startRest();
     await reload();
   }
 
@@ -228,6 +235,8 @@ export default function SessionScreen() {
           data={workout.exercises}
           keyExtractor={(item) => `${item.exercise.id}|${item.side ?? ''}`}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 40 }}>
               Ajoute ton premier exercice pour commencer.
@@ -247,11 +256,31 @@ export default function SessionScreen() {
           )}
         />
 
-        {restRemaining !== null && (
-          <Pressable style={[styles.restBar, { backgroundColor: '#FF9F0A' }]} onPress={stopRest}>
-            <Text style={styles.restText}>Repos : {formatElapsed(restRemaining * 1000)} — touche pour passer</Text>
-          </Pressable>
-        )}
+        <View style={[styles.chronoBar, { backgroundColor: colors.backgroundElement }]}>
+          <Text style={[styles.chronoTime, { color: colors.text }]}>{formatElapsed(chronoMs)}</Text>
+          <View style={styles.chronoActions}>
+            <Pressable
+              style={[
+                styles.chronoButton,
+                chronoRunning ? { backgroundColor: '#FF9F0A' } : { backgroundColor: '#007AFF' },
+              ]}
+              onPress={toggleChrono}>
+              <Text style={styles.chronoButtonText}>{chronoRunning ? 'Pause' : chronoMs > 0 ? 'Reprendre' : 'Démarrer'}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.chronoButton, styles.chronoResetButton]}
+              onPress={resetChrono}
+              disabled={chronoMs === 0 && !chronoRunning}>
+              <Text
+                style={[
+                  styles.chronoResetText,
+                  { color: chronoMs === 0 && !chronoRunning ? colors.textSecondary : '#FF453A' },
+                ]}>
+                Reset
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
         <View style={styles.footer}>
           <Pressable
@@ -347,6 +376,44 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 4,
   },
+  chronoBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#8884',
+  },
+  chronoTime: {
+    fontSize: 24,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  chronoActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chronoButton: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  chronoButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  chronoResetButton: {
+    borderWidth: 1.5,
+    borderColor: '#FF453A55',
+  },
+  chronoResetText: {
+    fontWeight: '700',
+    fontSize: 14,
+  },
   footer: {
     flexDirection: 'row',
     gap: 12,
@@ -370,23 +437,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
-  },
-  restBar: {
-    position: 'absolute',
-    bottom: 96,
-    alignSelf: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  restText: {
-    color: '#fff',
-    fontWeight: '700',
   },
   modalBackdrop: {
     flex: 1,
