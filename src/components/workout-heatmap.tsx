@@ -129,9 +129,9 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
 }
 
 function opacityFor(count: number, maxCount: number) {
-  if (count <= maxCount / 4) return 0.35;
-  if (count <= maxCount / 2) return 0.55;
-  if (count <= (maxCount * 3) / 4) return 0.78;
+  if (count <= maxCount / 4) return 0.6;
+  if (count <= maxCount / 2) return 0.75;
+  if (count <= (maxCount * 3) / 4) return 0.9;
   return 1;
 }
 
