@@ -35,6 +35,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="arbre"
+        options={{
+          title: 'Arbre',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="git-network-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="stats"
         options={{
           title: 'Stats',

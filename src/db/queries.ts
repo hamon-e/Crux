@@ -11,7 +11,7 @@ export async function getExercises(
   search?: string,
   muscle?: string
 ): Promise<Exercise[]> {
-  const conditions: string[] = [];
+  const conditions: string[] = ["COALESCE(category, '') = ''"];
   const params: (string | number)[] = [];
   if (search) {
     conditions.push('name LIKE ?');
@@ -44,6 +44,53 @@ export async function getExerciseById(db: SQLiteDatabase, id: number): Promise<E
 
 export async function updateExerciseMuscle(db: SQLiteDatabase, exerciseId: number, muscle: string) {
   await db.runAsync('UPDATE exercises SET muscle = ? WHERE id = ?', muscle, exerciseId);
+}
+
+// ---------- Arbre de compétences ----------
+
+export interface SkillExercise {
+  id: number;
+  name: string;
+  muscle: string;
+  category: string;
+  difficulty: string;
+  /** Nombre de séances terminées avec au moins une série validée. */
+  sessions: number;
+  /** Image de couverture (première étape ayant une image). */
+  cover_image?: string | null;
+}
+
+export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExercise[]> {
+  return db.getAllAsync<SkillExercise>(
+    `SELECT e.id, e.name, e.muscle,
+            COALESCE(e.category, '') AS category,
+            COALESCE(e.difficulty, '') AS difficulty,
+            (SELECT COUNT(DISTINCT s.workout_id) FROM sets s JOIN workouts w ON w.id = s.workout_id
+             WHERE s.exercise_id = e.id AND w.completed = 1 AND s.done = 1) AS sessions,
+            (SELECT es.image FROM exercise_steps es WHERE es.exercise_id = e.id
+             AND COALESCE(es.image, '') != '' ORDER BY es.step_order LIMIT 1) AS cover_image
+     FROM exercises e
+     WHERE COALESCE(e.category, '') != ''
+     ORDER BY e.name`
+  );
+}
+
+export interface ExerciseStep {
+  id: number;
+  exercise_id: number;
+  step_order: number;
+  name: string;
+  reps: string;
+  instructions: string;
+  image: string;
+  video: string;
+}
+
+export async function getExerciseSteps(db: SQLiteDatabase, exerciseId: number): Promise<ExerciseStep[]> {
+  return db.getAllAsync<ExerciseStep>(
+    'SELECT * FROM exercise_steps WHERE exercise_id = ? ORDER BY step_order',
+    exerciseId
+  );
 }
 
 // ---------- Types de séance ----------
