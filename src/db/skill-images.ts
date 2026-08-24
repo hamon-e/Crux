@@ -508,5 +508,6 @@ const ASSETS: Record<string, ImageSourcePropType> = {
 export function getStepImageSource(image?: string | null): ImageSourcePropType | null {
   if (!image) return null;
   if (image.startsWith('http')) return { uri: image };
-  return ASSETS[image] ?? null;
+  const key = image.replace(/\.(jpg|jpeg|png|webp)$/i, '');
+  return ASSETS[key] ?? null;
 }
