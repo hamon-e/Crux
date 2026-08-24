@@ -16,8 +16,10 @@ import {
   updateTemplateColor,
   updateTemplateExercise,
   updateTemplateSet,
+  validateRoutineOnDate,
 } from '@/db/queries';
 import type { Exercise, SetType, TemplateExercise, TemplateSet } from '@/db/types';
+import { PastDatePickerModal, formatFrDate } from '@/components/past-date-picker';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
 
@@ -28,6 +30,7 @@ export default function RoutineEditorScreen() {
   const colors = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [pastDateOpen, setPastDateOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,6 +48,28 @@ export default function RoutineEditorScreen() {
   async function handleColor(color: string) {
     await updateTemplateColor(db, detail!.id, color);
     await getTemplateDetail(db, detail!.id).then(setDetail);
+  }
+
+  function handleValidatePastPress() {
+    setPastDateOpen(true);
+  }
+
+  function handleValidatePast(date: string) {
+    setPastDateOpen(false);
+    confirm(
+      'Valider la séance',
+      `Marquer « ${detail!.name} » comme faite le ${formatFrDate(date)} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Valider',
+          onPress: async () => {
+            await validateRoutineOnDate(db, detail!.id, date);
+            router.back();
+          },
+        },
+      ]
+    );
   }
 
   function handleDelete() {
@@ -189,11 +214,22 @@ export default function RoutineEditorScreen() {
             }}>
             <Text style={styles.buttonText}>Démarrer avec cette routine</Text>
           </Pressable>
+          <Pressable style={[styles.deleteButton]} onPress={handleValidatePastPress}>
+            <Text style={{ color: '#007AFF', fontWeight: '600' }}>Valider pour un jour passé</Text>
+          </Pressable>
           <Pressable style={[styles.deleteButton]} onPress={handleDelete}>
             <Text style={{ color: '#FF453A', fontWeight: '600' }}>Supprimer</Text>
           </Pressable>
         </View>
       </ScrollView>
+
+      <PastDatePickerModal
+        visible={pastDateOpen}
+        value={new Date().toISOString().slice(0, 10)}
+        title="Séance faite le…"
+        onClose={() => setPastDateOpen(false)}
+        onConfirm={handleValidatePast}
+      />
     </SafeAreaView>
   );
 
