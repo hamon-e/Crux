@@ -71,6 +71,34 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Deux exos identiques mis à la suite dans une routine = faire les 2 côtés :
+ *  la première entrée devient « droit », la suivante « gauche ». */
+function assignConsecutiveSides<T extends { exercise_id: number; side: SetSide | null }>(
+  entries: T[]
+): void {
+  let i = 0;
+  while (i < entries.length) {
+    if (entries[i].side === null) {
+      let j = i;
+      while (
+        j < entries.length &&
+        entries[j].exercise_id === entries[i].exercise_id &&
+        entries[j].side === null
+      ) {
+        j++;
+      }
+      if (j - i >= 2) {
+        for (let k = i; k < j; k++) {
+          entries[k].side = (k - i) % 2 === 0 ? 'right' : 'left';
+        }
+      }
+      i = j;
+    } else {
+      i++;
+    }
+  }
+}
+
 export async function startWorkout(db: SQLiteDatabase, templateId?: number): Promise<number> {
   let workoutId = 0;
   await db.withTransactionAsync(async () => {
@@ -84,6 +112,8 @@ export async function startWorkout(db: SQLiteDatabase, templateId?: number): Pro
         'SELECT * FROM template_exercises WHERE template_id = ? ORDER BY order_index',
         templateId
       );
+      // 2 exos identiques à la suite = côté droit puis côté gauche.
+      assignConsecutiveSides(tExercises);
         const result = await db.runAsync(
           `INSERT INTO workouts (name, date, started_at, completed, template_id, color)
            VALUES (?, ?, ?, 0, ?, ?)`,
@@ -622,8 +652,11 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
       if (r.done === 1) g.doneCount++;
     }
     await db.runAsync('DELETE FROM template_exercises WHERE template_id = ?', templateId);
+    const sorted = [...groups.values()].sort((a, b) => a.order - b.order);
+    // On préserve la paire droite/gauche pour les exos dupliqués sans côté explicite.
+    assignConsecutiveSides(sorted);
     let i = 0;
-    for (const g of [...groups.values()].sort((a, b) => a.order - b.order)) {
+    for (const g of sorted) {
       const used = g.doneCount > 0 ? g.sets.slice(-g.doneCount) : g.sets;
       const last = used[used.length - 1];
       const result = await db.runAsync(
