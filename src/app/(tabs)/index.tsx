@@ -21,7 +21,6 @@ import {
   deleteWorkout,
   finishWorkout,
   getActiveWorkout,
-  getSetting,
   getTemplates,
   getWorkoutDetail,
   startWorkout,
@@ -53,9 +52,7 @@ export default function SessionScreen() {
   const [workout, setWorkout] = useState<WorkoutDetail | null>(null);
   const [templates, setTemplates] = useState<(Template & { exercise_count: number })[]>([]);
   const [elapsed, setElapsed] = useState(0);
-  const [restRemaining, setRestRemaining] = useState<number | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
-  const restInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const reload = useCallback(async () => {
@@ -88,31 +85,6 @@ export default function SessionScreen() {
     };
   }, [workout?.id, workout?.started_at]);
 
-  const stopRest = useCallback(() => {
-    if (restInterval.current) clearInterval(restInterval.current);
-    restInterval.current = null;
-    setRestRemaining(null);
-  }, []);
-
-  useEffect(() => () => stopRest(), [stopRest]);
-
-  const startRest = useCallback(async () => {
-    const saved = await getSetting(db, 'rest_seconds');
-    const seconds = saved ? parseInt(saved, 10) : 90;
-    stopRest();
-    setRestRemaining(seconds);
-    restInterval.current = setInterval(() => {
-      setRestRemaining((r) => {
-        if (r === null || r <= 1) {
-          if (restInterval.current) clearInterval(restInterval.current);
-          restInterval.current = null;
-          return null;
-        }
-        return r - 1;
-      });
-    }, 1000);
-  }, [db, stopRest]);
-
   async function handleStart(templateId?: number) {
     await startWorkout(db, templateId);
     await reload();
@@ -134,7 +106,6 @@ export default function SessionScreen() {
     if (!workout) return;
     const templateId = workout.template_id;
     setFinishOpen(false);
-    stopRest();
     if (templateId && syncRoutine) {
       await syncTemplateFromWorkout(db, templateId, workout.id);
     }
@@ -151,7 +122,6 @@ export default function SessionScreen() {
         text: 'Abandonner',
         style: 'destructive',
         onPress: async () => {
-          stopRest();
           await deleteWorkout(db, workout.id);
           await reload();
         },
@@ -161,7 +131,6 @@ export default function SessionScreen() {
 
   async function handleUpdateSet(setId: number, updates: SetUpdates & Record<string, unknown>) {
     await updateSet(db, setId, updates as SetUpdates);
-    if ((updates as { done?: number }).done === 1) void startRest();
     await reload();
   }
 
@@ -246,12 +215,6 @@ export default function SessionScreen() {
             />
           )}
         />
-
-        {restRemaining !== null && (
-          <Pressable style={[styles.restBar, { backgroundColor: '#FF9F0A' }]} onPress={stopRest}>
-            <Text style={styles.restText}>Repos : {formatElapsed(restRemaining * 1000)} — touche pour passer</Text>
-          </Pressable>
-        )}
 
         <View style={styles.footer}>
           <Pressable
@@ -370,23 +333,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
-  },
-  restBar: {
-    position: 'absolute',
-    bottom: 96,
-    alignSelf: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  restText: {
-    color: '#fff',
-    fontWeight: '700',
   },
   modalBackdrop: {
     flex: 1,
