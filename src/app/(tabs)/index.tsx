@@ -53,7 +53,12 @@ export default function SessionScreen() {
   const [templates, setTemplates] = useState<(Template & { exercise_count: number })[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [chronoRunning, setChronoRunning] = useState(false);
+  const [chronoMs, setChronoMs] = useState(0);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chronoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chronoStart = useRef<number | null>(null);
+  const chronoBase = useRef(0);
 
   const reload = useCallback(async () => {
     const active = await getActiveWorkout(db);
@@ -85,6 +90,37 @@ export default function SessionScreen() {
     };
   }, [workout?.id, workout?.started_at]);
 
+  const stopChronoInterval = useCallback(() => {
+    if (chronoTimer.current) clearInterval(chronoTimer.current);
+    chronoTimer.current = null;
+  }, []);
+
+  const toggleChrono = useCallback(() => {
+    if (chronoRunning) {
+      if (chronoStart.current !== null) chronoBase.current += Date.now() - chronoStart.current;
+      chronoStart.current = null;
+      stopChronoInterval();
+      setChronoRunning(false);
+    } else {
+      chronoStart.current = Date.now();
+      chronoTimer.current = setInterval(() => {
+        setChronoMs(chronoBase.current + (chronoStart.current !== null ? Date.now() - chronoStart.current : 0));
+      }, 200);
+      setChronoMs(chronoBase.current);
+      setChronoRunning(true);
+    }
+  }, [chronoRunning, stopChronoInterval]);
+
+  const resetChrono = useCallback(() => {
+    stopChronoInterval();
+    chronoStart.current = null;
+    chronoBase.current = 0;
+    setChronoMs(0);
+    setChronoRunning(false);
+  }, [stopChronoInterval]);
+
+  useEffect(() => () => resetChrono(), [resetChrono]);
+
   async function handleStart(templateId?: number) {
     await startWorkout(db, templateId);
     await reload();
@@ -106,6 +142,7 @@ export default function SessionScreen() {
     if (!workout) return;
     const templateId = workout.template_id;
     setFinishOpen(false);
+    resetChrono();
     if (templateId && syncRoutine) {
       await syncTemplateFromWorkout(db, templateId, workout.id);
     }
@@ -122,6 +159,7 @@ export default function SessionScreen() {
         text: 'Abandonner',
         style: 'destructive',
         onPress: async () => {
+          resetChrono();
           await deleteWorkout(db, workout.id);
           await reload();
         },
@@ -216,6 +254,32 @@ export default function SessionScreen() {
           )}
         />
 
+        <View style={[styles.chronoBar, { backgroundColor: colors.backgroundElement }]}>
+          <Text style={[styles.chronoTime, { color: colors.text }]}>{formatElapsed(chronoMs)}</Text>
+          <View style={styles.chronoActions}>
+            <Pressable
+              style={[
+                styles.chronoButton,
+                chronoRunning ? { backgroundColor: '#FF9F0A' } : { backgroundColor: '#007AFF' },
+              ]}
+              onPress={toggleChrono}>
+              <Text style={styles.chronoButtonText}>{chronoRunning ? 'Pause' : chronoMs > 0 ? 'Reprendre' : 'Démarrer'}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.chronoButton, styles.chronoResetButton]}
+              onPress={resetChrono}
+              disabled={chronoMs === 0 && !chronoRunning}>
+              <Text
+                style={[
+                  styles.chronoResetText,
+                  { color: chronoMs === 0 && !chronoRunning ? colors.textSecondary : '#FF453A' },
+                ]}>
+                Reset
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={styles.footer}>
           <Pressable
             style={[styles.secondaryButton, { borderColor: colors.backgroundSelected }]}
@@ -309,6 +373,44 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
     gap: 4,
+  },
+  chronoBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#8884',
+  },
+  chronoTime: {
+    fontSize: 24,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  chronoActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chronoButton: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  chronoButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  chronoResetButton: {
+    borderWidth: 1.5,
+    borderColor: '#FF453A55',
+  },
+  chronoResetText: {
+    fontWeight: '700',
+    fontSize: 14,
   },
   footer: {
     flexDirection: 'row',
