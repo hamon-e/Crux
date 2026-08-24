@@ -75,6 +75,29 @@ export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExerci
   );
 }
 
+/** Valide manuellement une séance pour un exercice (sans vraie séance enregistrée). */
+export async function validateExerciseManually(db: SQLiteDatabase, exerciseId: number): Promise<number> {
+  const day = today();
+  const endedAt = Date.now();
+  let workoutId = 0;
+  await db.withTransactionAsync(async () => {
+    const result = await db.runAsync(
+      'INSERT INTO workouts (name, date, started_at, ended_at, completed) VALUES (?, ?, ?, ?, 1)',
+      'Validation manuelle',
+      day,
+      endedAt,
+      endedAt
+    );
+    workoutId = result.lastInsertRowId;
+    await db.runAsync(
+      'INSERT INTO sets (workout_id, exercise_id, weight, reps, done, set_order) VALUES (?, ?, 0, 0, 1, 0)',
+      workoutId,
+      exerciseId
+    );
+  });
+  return workoutId;
+}
+
 export interface ExerciseStep {
   id: number;
   exercise_id: number;
