@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { File, Paths } from 'expo-file-system';
 
 import { getSkillExercises } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
@@ -16,13 +17,49 @@ import {
   type SkillNode,
 } from '@/lib/skill-tree';
 
-// Les compétences ultimes sont affichées en premier (première page de l'arbre).
-const DISPLAY_ORDER = ['ultimate', 'advanced', 'intermediate', 'beginner', 'fundamental'] as const;
+// Les fondamentaux sont affichés en premier (base de l'arbre).
+const DISPLAY_ORDER = ['fundamental', 'beginner', 'intermediate', 'advanced', 'ultimate'] as const;
+
+type DisplayTier = (typeof DISPLAY_ORDER)[number];
+
+const COLLAPSED_FILE = 'arbre-collapsed.json';
+
+async function loadCollapsedTiers(): Promise<Partial<Record<DisplayTier, boolean>>> {
+  try {
+    const file = new File(Paths.document, COLLAPSED_FILE);
+    if (!file.exists) return {};
+    return JSON.parse(await file.text());
+  } catch {
+    return {};
+  }
+}
+
+function saveCollapsedTiers(collapsed: Partial<Record<DisplayTier, boolean>>) {
+  try {
+    const file = new File(Paths.document, COLLAPSED_FILE);
+    file.write(JSON.stringify(collapsed));
+  } catch (e) {
+    console.warn('Arbre : impossible de sauvegarder les niveaux repliés', e);
+  }
+}
 
 export default function SkillTreeScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
   const [skills, setSkills] = useState<SkillNode[]>([]);
+  const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
+
+  useEffect(() => {
+    void loadCollapsedTiers().then(setCollapsed);
+  }, []);
+
+  const toggleTier = useCallback((tier: DisplayTier) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [tier]: !prev[tier] };
+      saveCollapsedTiers(next);
+      return next;
+    });
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -52,27 +89,37 @@ export default function SkillTreeScreen() {
           const nodes = tree[tier];
           if (nodes.length === 0) return null;
           const tierColor = TIER_COLORS[tier];
+          const isCollapsed = !!collapsed[tier];
           return (
             <View key={tier}>
               {sectionIdx > 0 && (
                 <View style={[styles.connector, { backgroundColor: colors.backgroundSelected }]} />
               )}
-              <View style={styles.sectionHeader}>
+              <Pressable
+                style={styles.sectionHeader}
+                onPress={() => toggleTier(tier)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !isCollapsed }}>
                 <Text style={styles.sectionIcon}>{TIER_ICONS[tier]}</Text>
                 <Text style={[styles.sectionTitle, { color: tierColor }]}>{TIER_LABELS[tier]}</Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
                   {nodes.filter((n) => n.mastered).length}/{nodes.length}
                 </Text>
-              </View>
-              <View style={styles.grid}>
-                {nodes.map((node) => (
-                  <SkillCard
-                    key={node.id}
-                    node={node}
-                    onPress={() => router.push(`/progression/${node.id}`)}
-                  />
-                ))}
-              </View>
+                <Text style={[styles.chevron, { color: colors.textSecondary }]}>
+                  {isCollapsed ? '▸' : '▾'}
+                </Text>
+              </Pressable>
+              {!isCollapsed && (
+                <View style={styles.grid}>
+                  {nodes.map((node) => (
+                    <SkillCard
+                      key={node.id}
+                      node={node}
+                      onPress={() => router.push(`/progression/${node.id}`)}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
           );
         })}
@@ -151,6 +198,7 @@ const styles = StyleSheet.create({
   },
   sectionIcon: { fontSize: 18 },
   sectionTitle: { fontSize: 17, fontWeight: '800', textTransform: 'uppercase', flex: 1 },
+  chevron: { fontSize: 14 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
