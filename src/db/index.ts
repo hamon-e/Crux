@@ -1,12 +1,13 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { SEED_EXERCISES } from './seed-exercises';
+import { MOBILITY_EXERCISES } from './mobility-exercises';
 import { normalizeSkillName, SKILL_STEPS } from './skill-steps';
 import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 13;
+export const DATABASE_VERSION = 14;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -33,6 +34,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await ensureColumn('exercises', 'category', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'difficulty', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'video_url', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'image', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'video', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('sets', 'side', 'TEXT');
@@ -378,6 +380,44 @@ SET muscle = (SELECT c.muscle FROM _catalog c WHERE c.name = exercises.name),
 WHERE name IN (SELECT name FROM _catalog);
 
 DROP TABLE _catalog;
+`);
+    });
+  }
+
+  if (currentDbVersion < 14) {
+    // v14 : tags d'exercices (« strength » / « mobility »). Les exercices
+    // existants hors compétences deviennent « strength » ; le catalogue de
+    // mobilité (Flexopedia) est importé avec le tag « mobility ».
+    await db.execAsync(`
+UPDATE exercises SET tags = 'strength'
+WHERE COALESCE(tags, '') = '' AND COALESCE(category, '') = '';
+`);
+
+    await db.execAsync(
+      'CREATE TEMP TABLE IF NOT EXISTS _mobility (name TEXT PRIMARY KEY, difficulty TEXT NOT NULL, muscle TEXT NOT NULL)'
+    );
+    await db.withTransactionAsync(async () => {
+      for (const [name, difficulty, , muscle] of MOBILITY_EXERCISES) {
+        await db.runAsync(
+          'INSERT OR REPLACE INTO _mobility (name, difficulty, muscle) VALUES (?, ?, ?)',
+          name,
+          difficulty,
+          muscle
+        );
+      }
+      await db.execAsync(`
+INSERT OR IGNORE INTO exercises (name, muscle, equipment, is_custom, tags)
+SELECT name, muscle, 'bodyweight', 0, 'mobility' FROM _mobility;
+
+UPDATE exercises
+SET muscle = (SELECT c.muscle FROM _mobility c WHERE c.name = exercises.name),
+    difficulty = (SELECT c.difficulty FROM _mobility c WHERE c.name = exercises.name),
+    tags = CASE WHEN COALESCE(tags, '') = '' THEN 'mobility'
+                WHEN tags NOT LIKE '%mobility%' THEN tags || ',mobility'
+                ELSE tags END
+WHERE name IN (SELECT name FROM _mobility);
+
+DROP TABLE _mobility;
 `);
     });
   }

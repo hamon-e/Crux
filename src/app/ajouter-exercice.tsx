@@ -19,6 +19,11 @@ import { EQUIPMENT, MUSCLES, MUSCLE_LABELS, type Exercise } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
 
+const TAGS = [
+  { value: 'strength', label: 'Force' },
+  { value: 'mobility', label: 'Mobilité' },
+];
+
 export default function AddExerciseScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
@@ -27,6 +32,7 @@ export default function AddExerciseScreen() {
 
   const [search, setSearch] = useState('');
   const [muscleFilter, setMuscleFilter] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
@@ -34,8 +40,8 @@ export default function AddExerciseScreen() {
   const [newEquipment, setNewEquipment] = useState<string>('barbell');
 
   useEffect(() => {
-    void getExercises(db, search || undefined, muscleFilter ?? undefined).then(setExercises);
-  }, [db, search, muscleFilter]);
+    void getExercises(db, search || undefined, muscleFilter ?? undefined, tagFilter ?? undefined).then(setExercises);
+  }, [db, search, muscleFilter, tagFilter]);
 
   async function pick(exercise: Exercise) {
     if (mode === 'template' && params.templateId) {
@@ -86,16 +92,29 @@ export default function AddExerciseScreen() {
       </View>
 
       <View style={styles.filters}>
-        <TouchableOpacity onPress={() => setMuscleFilter(null)}>
-          <Text style={[styles.chip, muscleFilter === null && styles.chipActive, { borderColor: colors.backgroundSelected }]}>
-            Tous
-          </Text>
-        </TouchableOpacity>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={[...MUSCLES]}
-          keyExtractor={(m) => m}
+          data={TAGS}
+          keyExtractor={(t) => t.value}
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => setTagFilter(tagFilter === item.value ? null : item.value)}>
+              <Text
+                style={[
+                  styles.chip,
+                  tagFilter === item.value && styles.chipActive,
+                  { borderColor: colors.backgroundSelected },
+                ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={[null, ...MUSCLES]}
+          keyExtractor={(m) => m ?? '__all__'}
           renderItem={({ item }) => (
             <TouchableOpacity onPress={() => setMuscleFilter(muscleFilter === item ? null : item)}>
               <Text
@@ -104,7 +123,7 @@ export default function AddExerciseScreen() {
                   muscleFilter === item && styles.chipActive,
                   { borderColor: colors.backgroundSelected },
                 ]}>
-                {MUSCLE_LABELS[item] ?? item}
+                {item === null ? 'Tous' : MUSCLE_LABELS[item] ?? item}
               </Text>
             </TouchableOpacity>
           )}
@@ -123,6 +142,7 @@ export default function AddExerciseScreen() {
               <Text style={{ color: colors.text, fontSize: 16 }}>{item.name}</Text>
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
                 {MUSCLE_LABELS[item.muscle] ?? item.muscle} · {item.equipment}
+                {item.tags?.includes('mobility') ? ' · mobilité' : ''}
                 {item.is_custom ? ' · perso' : ''}
               </Text>
             </View>

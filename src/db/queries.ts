@@ -9,7 +9,8 @@ import { createExerciseMatcher } from '@/lib/exercise-matching';
 export async function getExercises(
   db: SQLiteDatabase,
   search?: string,
-  muscle?: string
+  muscle?: string,
+  tag?: string
 ): Promise<Exercise[]> {
   const conditions: string[] = ["COALESCE(category, '') = ''"];
   const params: (string | number)[] = [];
@@ -20,6 +21,10 @@ export async function getExercises(
   if (muscle) {
     conditions.push('muscle = ?');
     params.push(muscle);
+  }
+  if (tag) {
+    conditions.push("(',' || COALESCE(tags, '') || ',') LIKE ?");
+    params.push(`%,${tag},%`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   return db.getAllAsync<Exercise>(
