@@ -4,11 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { getExerciseSteps, getSkillExercises, validateExerciseManually } from '@/db/queries';
+import {
+  getExerciseSteps,
+  getSkillExercises,
+  validateExercisesManually,
+  validateExerciseStep,
+} from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  MASTERY_SESSIONS,
   TIERS,
   TIER_COLORS,
   TIER_ICONS,
@@ -26,6 +30,7 @@ export default function ProgressionScreen() {
   const [stepsOpen, setStepsOpen] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [validating, setValidating] = useState(false);
+  const [hideMastered, setHideMastered] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -46,7 +51,19 @@ export default function ProgressionScreen() {
     if (validating) return;
     try {
       setValidating(true);
-      await validateExerciseManually(db, exerciseId);
+      const selected = nodes.find((node) => node.id === exerciseId);
+      if (!selected) return;
+
+      const selectedTierIdx = TIERS.indexOf(selected.tier);
+      const exercisesToValidate = nodes
+        .filter(
+          (node) =>
+            node.category === selected.category &&
+            TIERS.indexOf(node.tier) <= selectedTierIdx &&
+            !node.mastered
+        )
+        .map((node) => node.id);
+      await validateExercisesManually(db, exercisesToValidate);
       setRefreshKey((k) => k + 1);
     } catch (e) {
       console.warn('Progression : validation manuelle impossible', e);
@@ -69,8 +86,13 @@ export default function ProgressionScreen() {
   const sameCategory = nodes
     .filter((n) => n.category === current.category)
     .sort((a, b) => TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier) || a.name.localeCompare(b.name));
-  const prerequisites = sameCategory.filter((n) => TIERS.indexOf(n.tier) < currentTierIdx);
-  const unlocks = sameCategory.filter((n) => TIERS.indexOf(n.tier) > currentTierIdx);
+  const prerequisites = sameCategory.filter(
+    (n) => TIERS.indexOf(n.tier) < currentTierIdx && (!hideMastered || !n.mastered)
+  );
+  const unlocks = sameCategory.filter(
+    (n) => TIERS.indexOf(n.tier) > currentTierIdx && (!hideMastered || !n.mastered)
+  );
+  const hasMasteredAround = sameCategory.some((n) => n.mastered && n.id !== current.id);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -78,6 +100,19 @@ export default function ProgressionScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Text style={{ color: '#007AFF', fontWeight: '600' }}>‹ Arbre</Text>
         </Pressable>
+
+        {hasMasteredAround && (
+          <Pressable
+            style={[styles.filterButton, { borderColor: colors.backgroundSelected }]}
+            onPress={() => setHideMastered((h) => !h)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: hideMastered }}>
+            <Text style={{ fontSize: 14 }}>{hideMastered ? '☑' : '☐'}</Text>
+            <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+              Masquer les exercices réussis
+            </Text>
+          </Pressable>
+        )}
 
         <View style={styles.header}>
           <Text style={{ fontSize: 28 }}>{TIER_ICONS[current.tier]}</Text>
@@ -118,7 +153,11 @@ export default function ProgressionScreen() {
     const cover = getStepImageSource(node.cover_image ?? null);
     return (
       <Pressable
-        style={[styles.pathCard, { backgroundColor: colors.backgroundElement }, !node.unlocked && styles.locked]}
+        style={[
+          styles.pathCard,
+          { backgroundColor: node.mastered ? '#34c75922' : colors.backgroundElement },
+          !node.unlocked && styles.locked,
+        ]}
         onPress={onPress}>
         {cover ? (
           <Image source={cover} style={styles.nodeImage} resizeMode="cover" />
@@ -142,7 +181,7 @@ export default function ProgressionScreen() {
           </View>
         </View>
         <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-          {node.mastered ? '✅' : node.unlocked ? '🔓' : '🔒'} {node.sessions}/{MASTERY_SESSIONS}
+          {node.mastered ? '✅ Skill validé' : node.unlocked ? '🔓 À valider' : '🔒 Verrouillé'}
         </Text>
       </Pressable>
     );
@@ -150,14 +189,20 @@ export default function ProgressionScreen() {
 
   function CurrentNode({ node }: { node: SkillNode }) {
     return (
-      <View style={[styles.currentCard, { borderColor: TIER_COLORS[node.tier] }]}>
+      <View
+        style={[
+          styles.currentCard,
+          {
+            backgroundColor: node.mastered ? '#34c75922' : colors.backgroundElement,
+            borderColor: TIER_COLORS[node.tier],
+          },
+        ]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Text style={{ fontSize: 20 }}>{node.mastered ? '✅' : node.unlocked ? '🔓' : '🔒'}</Text>
           <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16, flex: 1 }}>{node.name}</Text>
         </View>
         <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
-          {node.sessions}/{MASTERY_SESSIONS} séances validées
-          {node.mastered ? ' — maîtrisée !' : ''}
+          {node.mastered ? 'Skill validé' : 'Skill non validé'}
         </Text>
         {!node.mastered && (
           <Pressable
@@ -165,7 +210,7 @@ export default function ProgressionScreen() {
             onPress={() => void handleManualValidate(node.id)}
             disabled={validating}>
             <Text style={{ color: TIER_COLORS[node.tier], fontWeight: '700' }}>
-              {validating ? 'Validation…' : '✓ Valider une séance'}
+              {validating ? 'Validation…' : '✓ Valider le skill'}
             </Text>
           </Pressable>
         )}
@@ -176,6 +221,8 @@ export default function ProgressionScreen() {
 
   function StepsList({ exerciseId, tierColor }: { exerciseId: number; tierColor: string }) {
     const [steps, setSteps] = useState<Awaited<ReturnType<typeof getExerciseSteps>>>([]);
+    const [validatingStep, setValidatingStep] = useState<number | null>(null);
+    const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
     useFocusEffect(
       useCallback(() => {
         getExerciseSteps(db, exerciseId)
@@ -184,6 +231,8 @@ export default function ProgressionScreen() {
       }, [exerciseId])
     );
     if (steps.length === 0) return null;
+    const validatedSteps = steps.filter((step) => step.validated === 1).length;
+    const validationPercent = Math.round((validatedSteps / steps.length) * 100);
     return (
       <View style={{ marginTop: 12, gap: 8 }}>
         <Pressable onPress={() => setStepsOpen((o) => !o)} hitSlop={6}>
@@ -191,9 +240,32 @@ export default function ProgressionScreen() {
             {stepsOpen ? '▾' : '▸'} Étapes de progression ({steps.length})
           </Text>
         </Pressable>
+        <View style={styles.stepsProgress}>
+          <View style={styles.stepsProgressHeader}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700' }}>
+              Validation des étapes
+            </Text>
+            <Text style={{ color: validationPercent === 100 ? '#34c759' : tierColor, fontSize: 12, fontWeight: '800' }}>
+              {validationPercent}% ({validatedSteps}/{steps.length})
+            </Text>
+          </View>
+          <View style={[styles.stepProgressTrack, { backgroundColor: colors.backgroundSelected }]}>
+            <View
+              style={[
+                styles.stepProgressFill,
+                { width: `${validationPercent}%`, backgroundColor: validationPercent === 100 ? '#34c759' : tierColor },
+              ]}
+            />
+          </View>
+        </View>
         {stepsOpen &&
           steps.map((step, i) => (
-            <View key={step.id} style={[styles.stepCard, { backgroundColor: colors.backgroundSelected }]}>
+            <Pressable
+              key={step.id}
+              style={[styles.stepCard, { backgroundColor: colors.backgroundSelected }]}
+              onPress={() => setExpandedSteps((current) => ({ ...current, [step.id]: !current[step.id] }))}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: !!expandedSteps[step.id] }}>
               <View style={styles.stepHeader}>
                 {(() => {
                   const src = getStepImageSource(step.image);
@@ -218,13 +290,31 @@ export default function ProgressionScreen() {
                     <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{step.reps}</Text>
                   </View>
                 )}
+                <Pressable
+                  style={[styles.stepValidateButton, { borderColor: step.validated ? '#34c759' : tierColor }]}
+                  disabled={step.validated === 1 || validatingStep === step.step_order}
+                  onPress={() => {
+                    setValidatingStep(step.step_order);
+                    void validateExerciseStep(db, exerciseId, step.step_order)
+                      .then(() => getExerciseSteps(db, exerciseId).then(setSteps))
+                      .catch((e) => console.warn('Progression : validation de l’étape impossible', e))
+                      .finally(() => setValidatingStep(null));
+                  }}>
+                  <Text style={{ color: step.validated ? '#34c759' : tierColor, fontWeight: '700', fontSize: 11 }}>
+                    {step.validated ? '✓ Validée' : validatingStep === step.step_order ? '…' : 'Valider'}
+                  </Text>
+                </Pressable>
               </View>
-              {!!step.instructions && (
-                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 6 }}>
-                  {step.instructions.trim()}
-                </Text>
+              {expandedSteps[step.id] && (
+                <View style={styles.stepDetails}>
+                  {!!step.instructions && (
+                    <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                      {step.instructions.trim()}
+                    </Text>
+                  )}
+                </View>
               )}
-            </View>
+            </Pressable>
           ))}
       </View>
     );
@@ -241,9 +331,19 @@ function SectionLabel({ text, color }: { text: string; color: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, gap: 6 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  content: { padding: 20, gap: 6 },  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
   title: { fontSize: 26, fontWeight: '800' },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
   linkLine: { width: 3, height: 16, borderRadius: 2, alignSelf: 'center', marginLeft: 30 },
   pathCard: {
     flexDirection: 'row',
@@ -274,11 +374,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
+  stepValidateButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+  },
   stepCard: {
     borderRadius: 10,
     padding: 10,
   },
+  stepsProgress: { gap: 5 },
+  stepsProgressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  stepProgressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  stepProgressFill: { height: '100%', borderRadius: 3 },
   stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepDetails: { gap: 6, marginTop: 6 },
   stepBadge: {
     width: 22,
     height: 22,

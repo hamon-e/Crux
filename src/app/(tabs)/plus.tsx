@@ -13,23 +13,13 @@ import {
 } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 import {
   REMINDER_DEFAULT_HOUR,
   REMINDER_DEFAULT_MINUTE,
   requestReminderPermission,
   syncRoutineReminder,
 } from '@/lib/reminders';
-
-export const ROUTINE_COLORS = [
-  '#4a90d9',
-  '#34c759',
-  '#ff9500',
-  '#af52de',
-  '#ff2d55',
-  '#5ac8fa',
-  '#ffd60a',
-  '#8e8e93',
-];
 
 export default function MoreScreen() {
   const db = useSQLiteContext();
@@ -48,7 +38,8 @@ export default function MoreScreen() {
         setTemplates(await getTemplates(db));
         const saved = await getSetting(db, 'rest_seconds');
         if (saved) setRestSeconds(saved);
-        setReminderEnabled((await getSetting(db, 'reminder_enabled')) === '1');
+        const savedReminderEnabled = await getSetting(db, 'reminder_enabled');
+        setReminderEnabled(savedReminderEnabled === null || savedReminderEnabled === '1');
         const h = parseInt((await getSetting(db, 'reminder_hour')) ?? '', 10);
         const m = parseInt((await getSetting(db, 'reminder_minute')) ?? '', 10);
         if (!Number.isNaN(h)) setReminderHour(String(h));
@@ -97,8 +88,8 @@ export default function MoreScreen() {
 
   function handleDeleteAll() {
     confirm(
-      'Supprimer toutes les données',
-      'Séances, séries, routines et exercices personnalisés seront définitivement supprimés. Cette action est irréversible.',
+      'Supprimer mes données',
+      "Tes séances, séries, routines, types de séance et exercices personnels seront définitivement supprimés. Les exercices intégrés à l'app seront conservés. Cette action est irréversible.",
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -239,7 +230,7 @@ export default function MoreScreen() {
             <Text style={{ color: colors.textSecondary }}>›</Text>
           </Pressable>
           <Pressable style={[styles.dataRow, { marginTop: 4 }]} onPress={handleDeleteAll}>
-            <Text style={{ color: '#FF453A', fontWeight: '600' }}>Supprimer toutes les données</Text>
+            <Text style={{ color: '#FF453A', fontWeight: '600' }}>Supprimer mes données</Text>
             <Text style={{ color: colors.textSecondary }}>›</Text>
           </Pressable>
         </View>

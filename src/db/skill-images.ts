@@ -4,6 +4,8 @@ import type { ImageSourcePropType } from 'react-native';
 // Clé = hash de l'URL d'origine.
 
 const ASSETS: Record<string, ImageSourcePropType> = {
+  'hollow-hold-arms-down': require('../assets/skills/hollow-hold-arms-down.jpg'),
+  'tuck-back-rocks': require('../assets/skills/tuck-back-rocks.jpg'),
   '01d938fd70bc': require('../assets/skills/01d938fd70bc.png'),
   '02ab6cf36493': require('../assets/skills/02ab6cf36493.jpg'),
   '0341313bc2c4': require('../assets/skills/0341313bc2c4.jpg'),

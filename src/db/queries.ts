@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Exercise, SeanceType, SetSide, Template, TemplateExercise, TemplateSet, Workout, WorkoutSet } from './types';
 import { createExerciseMatcher } from '@/lib/exercise-matching';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 
 // ---------- Exercices ----------
 
@@ -10,9 +11,13 @@ export async function getExercises(
   db: SQLiteDatabase,
   search?: string,
   muscle?: string,
-  tag?: string
+  tag?: string,
+  includeSkillExercises = false
 ): Promise<Exercise[]> {
-  const conditions: string[] = ["COALESCE(category, '') = ''"];
+  const conditions: string[] = [];
+  if (!includeSkillExercises) {
+    conditions.push("COALESCE(category, '') = ''");
+  }
   const params: (string | number)[] = [];
   if (search) {
     conditions.push('name LIKE ?');
@@ -51,6 +56,10 @@ export async function updateExerciseMuscle(db: SQLiteDatabase, exerciseId: numbe
   await db.runAsync('UPDATE exercises SET muscle = ? WHERE id = ?', muscle, exerciseId);
 }
 
+export async function updateExerciseImage(db: SQLiteDatabase, exerciseId: number, imageUri: string) {
+  await db.runAsync('UPDATE exercises SET image_uri = ? WHERE id = ?', imageUri, exerciseId);
+}
+
 // ---------- Arbre de compétences ----------
 
 export interface SkillExercise {
@@ -59,7 +68,7 @@ export interface SkillExercise {
   muscle: string;
   category: string;
   difficulty: string;
-  /** Nombre de séances terminées avec au moins une série validée. */
+  /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée. */
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
@@ -80,27 +89,36 @@ export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExerci
   );
 }
 
-/** Valide manuellement une séance pour un exercice (sans vraie séance enregistrée). */
+/** Valide manuellement un skill en ajoutant une occurrence à son historique. */
 export async function validateExerciseManually(db: SQLiteDatabase, exerciseId: number): Promise<number> {
+  const [workoutId] = await validateExercisesManually(db, [exerciseId]);
+  return workoutId;
+}
+
+/** Valide plusieurs skills manuellement dans une seule transaction. */
+export async function validateExercisesManually(db: SQLiteDatabase, exerciseIds: number[]): Promise<number[]> {
   const day = today();
   const endedAt = Date.now();
-  let workoutId = 0;
+  const workoutIds: number[] = [];
   await db.withTransactionAsync(async () => {
-    const result = await db.runAsync(
-      'INSERT INTO workouts (name, date, started_at, ended_at, completed) VALUES (?, ?, ?, ?, 1)',
-      'Validation manuelle',
-      day,
-      endedAt,
-      endedAt
-    );
-    workoutId = result.lastInsertRowId;
-    await db.runAsync(
-      'INSERT INTO sets (workout_id, exercise_id, weight, reps, done, set_order) VALUES (?, ?, 0, 0, 1, 0)',
-      workoutId,
-      exerciseId
-    );
+    for (const exerciseId of [...new Set(exerciseIds)]) {
+      const result = await db.runAsync(
+        'INSERT INTO workouts (name, date, started_at, ended_at, completed) VALUES (?, ?, ?, ?, 1)',
+        'Validation manuelle',
+        day,
+        endedAt,
+        endedAt
+      );
+      const workoutId = result.lastInsertRowId;
+      workoutIds.push(workoutId);
+      await db.runAsync(
+        'INSERT INTO sets (workout_id, exercise_id, weight, reps, done, set_order) VALUES (?, ?, 0, 0, 1, 0)',
+        workoutId,
+        exerciseId
+      );
+    }
   });
-  return workoutId;
+  return workoutIds;
 }
 
 export interface ExerciseStep {
@@ -112,12 +130,29 @@ export interface ExerciseStep {
   instructions: string;
   image: string;
   video: string;
+  validated: number;
 }
 
 export async function getExerciseSteps(db: SQLiteDatabase, exerciseId: number): Promise<ExerciseStep[]> {
   return db.getAllAsync<ExerciseStep>(
-    'SELECT * FROM exercise_steps WHERE exercise_id = ? ORDER BY step_order',
+    `SELECT es.*, CASE WHEN esp.exercise_id IS NULL THEN 0 ELSE 1 END AS validated
+     FROM exercise_steps es
+     LEFT JOIN exercise_step_progress esp
+       ON esp.exercise_id = es.exercise_id AND esp.step_order = es.step_order
+     WHERE es.exercise_id = ? ORDER BY es.step_order`,
     exerciseId
+  );
+}
+
+/** Valide une étape indépendamment du skill complet. */
+export async function validateExerciseStep(db: SQLiteDatabase, exerciseId: number, stepOrder: number) {
+  await db.runAsync(
+    `INSERT INTO exercise_step_progress (exercise_id, step_order, validated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(exercise_id, step_order) DO UPDATE SET validated_at = excluded.validated_at`,
+    exerciseId,
+    stepOrder,
+    Date.now()
   );
 }
 
@@ -987,16 +1022,21 @@ export async function setSetting(db: SQLiteDatabase, key: string, value: string)
   );
 }
 
-/** Supprime toutes les données : séances, séries, routines et exercices personnalisés. */
+/**
+ * Supprime les données créées par l'utilisateur sans toucher au catalogue livré
+ * avec l'application (exercices intégrés et étapes de progression).
+ */
 export async function deleteAllData(db: SQLiteDatabase) {
   await db.withTransactionAsync(async () => {
     await db.execAsync(`
 DELETE FROM sets;
 DELETE FROM workouts;
+DELETE FROM template_sets;
 DELETE FROM template_exercises;
 DELETE FROM templates;
-DELETE FROM exercises WHERE is_custom = 1;
 DELETE FROM activity_types;
+DELETE FROM exercise_step_progress;
+DELETE FROM exercises WHERE is_custom = 1;
 `);
   });
 }
@@ -1050,7 +1090,7 @@ export async function importStrongWorkouts(
   }[],
   /** Association manuelle nom CSV -> id d'exercice existant. */
   exerciseOverrides: Record<string, number> = {},
-  /** Groupe musculaire des nouveaux exercices créés (nom CSV -> muscle). */
+  /** Groupe musculaire choisi pendant le matching (nom CSV -> muscle). */
   newExerciseMuscles: Record<string, string> = {}
 ): Promise<ImportStats> {
   const stats: ImportStats = {
@@ -1076,6 +1116,7 @@ export async function importStrongWorkouts(
 
   // Résolution nom CSV -> id d'exercice, mémorisée pour construire les routines
   const resolvedByName = new Map<string, number>();
+  const updatedOverrideMuscles = new Set<string>();
   // Séances importées par nom de routine (on garde la plus récente comme référence)
   const importedByName = new Map<
     string,
@@ -1110,6 +1151,16 @@ export async function importStrongWorkouts(
         let ex: { id: number; name: string } | null;
         const overrideId = exerciseOverrides[s.exerciseName];
         if (overrideId) {
+          const selectedMuscle = newExerciseMuscles[s.exerciseName];
+          const muscleUpdateKey = `${overrideId}:${selectedMuscle ?? ''}`;
+          if (selectedMuscle && !updatedOverrideMuscles.has(muscleUpdateKey)) {
+            await txn.runAsync(
+              'UPDATE exercises SET muscle = ? WHERE id = ?',
+              selectedMuscle,
+              overrideId
+            );
+            updatedOverrideMuscles.add(muscleUpdateKey);
+          }
           ex = { id: overrideId, name: s.exerciseName };
         } else {
           ex = matcher.find(s.exerciseName);
@@ -1181,6 +1232,12 @@ async function createRoutinesFromImports(
   const existingTemplates = new Set(
     (await txn.getAllAsync<{ name: string }>('SELECT name FROM templates')).map((r) => r.name)
   );
+  const usedRoutineColors = new Set(
+    (await txn.getAllAsync<{ color: string }>("SELECT color FROM templates WHERE COALESCE(color, '') != ''"))
+      .map((r) => r.color)
+  );
+  let nextPaletteIndex = 0;
+  let generatedColorIndex = 0;
 
   for (const [name, ref] of importedByName) {
     if (!name.trim() || existingTemplates.has(name)) continue;
@@ -1206,8 +1263,13 @@ async function createRoutinesFromImports(
     }
     if (entries.size === 0) continue;
 
+    const color = getNextRoutineColor(
+      usedRoutineColors,
+      () => ROUTINE_COLORS[nextPaletteIndex++ % ROUTINE_COLORS.length],
+      () => getGeneratedRoutineColor(generatedColorIndex++)
+    );
     const templateId = (
-      await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', '')
+      await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', color)
     ).lastInsertRowId;
 
     let orderIndex = 0;
@@ -1228,6 +1290,52 @@ async function createRoutinesFromImports(
     existingTemplates.add(name);
     stats.routinesCreated++;
   }
+}
+
+/** Choisit une couleur inutilisée, avec un repli distinct si toute la palette est prise. */
+function getNextRoutineColor(
+  usedColors: Set<string>,
+  getPaletteColor: () => string,
+  getFallbackColor: () => string
+): string {
+  for (let i = 0; i < ROUTINE_COLORS.length; i++) {
+    const color = getPaletteColor();
+    if (!usedColors.has(color)) {
+      usedColors.add(color);
+      return color;
+    }
+  }
+
+  let color = getFallbackColor();
+  while (usedColors.has(color)) color = getFallbackColor();
+  usedColors.add(color);
+  return color;
+}
+
+function getGeneratedRoutineColor(index: number): string {
+  // L’angle d’or répartit les teintes pour rester visuellement distinctif.
+  const hue = (index * 137.508) % 360;
+  const saturation = 65 / 100;
+  const lightness = 48 / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const section = hue / 60;
+  const x = chroma * (1 - Math.abs((section % 2) - 1));
+  const [r, g, b] =
+    section < 1
+      ? [chroma, x, 0]
+      : section < 2
+        ? [x, chroma, 0]
+        : section < 3
+          ? [0, chroma, x]
+          : section < 4
+            ? [0, x, chroma]
+            : section < 5
+              ? [x, 0, chroma]
+              : [chroma, 0, x];
+  const match = 2 * lightness - chroma;
+  return `#${[r, g, b]
+    .map((value) => Math.round((value + match) * 255).toString(16).padStart(2, '0'))
+    .join('')}`;
 }
 
 /** Valeur la plus fréquente (repli : moyenne arrondie). */

@@ -9,7 +9,6 @@ import { getSkillExercises } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  MASTERY_SESSIONS,
   TIER_COLORS,
   TIER_ICONS,
   TIER_LABELS,
@@ -21,6 +20,13 @@ import {
 const DISPLAY_ORDER = ['fundamental', 'beginner', 'intermediate', 'advanced', 'ultimate'] as const;
 
 type DisplayTier = (typeof DISPLAY_ORDER)[number];
+type SkillFilter = 'all' | 'mastered' | 'unmastered';
+
+const SKILL_FILTERS: { value: SkillFilter; label: string }[] = [
+  { value: 'all', label: 'Tous' },
+  { value: 'mastered', label: 'Validés' },
+  { value: 'unmastered', label: 'À valider' },
+];
 
 const COLLAPSED_FILE = 'arbre-collapsed.json';
 
@@ -48,6 +54,7 @@ export default function SkillTreeScreen() {
   const colors = useTheme();
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
+  const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
 
   useEffect(() => {
     void loadCollapsedTiers().then(setCollapsed);
@@ -85,11 +92,50 @@ export default function SkillTreeScreen() {
           {masteredCount}/{skills.length} maîtrisées · {unlockedCount} débloquées
         </Text>
 
+        <View
+          style={[styles.filterControl, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Filtrer les exercices">
+          {SKILL_FILTERS.map((filter) => {
+            const selected = skillFilter === filter.value;
+            return (
+              <Pressable
+                key={filter.value}
+                style={[
+                  styles.filterOption,
+                  {
+                    backgroundColor: selected ? colors.text : colors.background,
+                    borderColor: selected ? colors.text : colors.border,
+                  },
+                ]}
+                onPress={() => setSkillFilter(filter.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}>
+                <Text
+                  style={[
+                    styles.filterOptionText,
+                    { color: selected ? colors.background : colors.text },
+                    selected && styles.filterOptionTextSelected,
+                  ]}>
+                  {filter.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {DISPLAY_ORDER.map((tier, sectionIdx) => {
-          const nodes = tree[tier];
-          if (nodes.length === 0) return null;
+          const allNodes = tree[tier];
+          if (allNodes.length === 0) return null;
+          const nodes =
+            skillFilter === 'mastered'
+              ? allNodes.filter((n) => n.mastered)
+              : skillFilter === 'unmastered'
+                ? allNodes.filter((n) => !n.mastered)
+                : allNodes;
           const tierColor = TIER_COLORS[tier];
           const isCollapsed = !!collapsed[tier];
+          if (nodes.length === 0 && isCollapsed) return null;
           return (
             <View key={tier}>
               {sectionIdx > 0 && (
@@ -103,23 +149,28 @@ export default function SkillTreeScreen() {
                 <Text style={styles.sectionIcon}>{TIER_ICONS[tier]}</Text>
                 <Text style={[styles.sectionTitle, { color: tierColor }]}>{TIER_LABELS[tier]}</Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  {nodes.filter((n) => n.mastered).length}/{nodes.length}
+                  {allNodes.filter((n) => n.mastered).length}/{allNodes.length}
                 </Text>
                 <Text style={[styles.chevron, { color: colors.textSecondary }]}>
                   {isCollapsed ? '▸' : '▾'}
                 </Text>
               </Pressable>
-              {!isCollapsed && (
-                <View style={styles.grid}>
-                  {nodes.map((node) => (
-                    <SkillCard
-                      key={node.id}
-                      node={node}
-                      onPress={() => router.push(`/progression/${node.id}`)}
-                    />
-                  ))}
-                </View>
-              )}
+              {!isCollapsed &&
+                (nodes.length > 0 ? (
+                  <View style={styles.grid}>
+                    {nodes.map((node) => (
+                      <SkillCard
+                        key={node.id}
+                        node={node}
+                        onPress={() => router.push(`/progression/${node.id}`)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+                    {skillFilter === 'mastered' ? 'Aucun exercice réussi ici.' : 'Tout est maîtrisé ici 🎉'}
+                  </Text>
+                ))}
             </View>
           );
         })}
@@ -176,9 +227,7 @@ function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) 
         />
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
-        {node.mastered
-          ? `Maîtrisée (${MASTERY_SESSIONS} séances)`
-          : `${node.sessions}/${MASTERY_SESSIONS} séances`}
+        {node.mastered ? 'Skill validé' : node.unlocked ? 'Skill à valider' : 'Skill verrouillé'}
       </Text>
     </Pressable>
   );
@@ -199,6 +248,30 @@ const styles = StyleSheet.create({
   sectionIcon: { fontSize: 18 },
   sectionTitle: { fontSize: 17, fontWeight: '800', textTransform: 'uppercase', flex: 1 },
   chevron: { fontSize: 14 },
+  filterControl: {
+    flexDirection: 'row',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 4,
+    alignSelf: 'stretch',
+  },
+  filterOption: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+  },
+  filterOptionText: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  filterOptionTextSelected: {
+    fontWeight: '700',
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -8,11 +8,14 @@ import { useTheme } from '@/hooks/use-theme';
 interface Props {
   name: string;
   muscle?: string;
+  imageUri?: string;
   /** largeur en px ; hauteur = largeur * 2/3 (format 3:2 des images) */
   width?: number;
   radius?: number;
   /** pleine largeur du parent, ratio 3:2 conservé */
   fullWidth?: boolean;
+  /** Libellé affiché dans le repli quand aucune image n'est disponible. */
+  emptyLabel?: string;
   style?: object;
 }
 
@@ -35,9 +38,18 @@ const FALLBACK_LABELS: Record<string, string> = {
 };
 
 /** Image d'un exercice (base free-exercise-db, domaine public) avec repli silhouette. */
-export function ExerciseImage({ name, muscle, width, radius = 8, fullWidth, style }: Props) {
+export function ExerciseImage({
+  name,
+  muscle,
+  imageUri,
+  width,
+  radius = 8,
+  fullWidth,
+  emptyLabel,
+  style,
+}: Props) {
   const colors = useTheme();
-  const source = EXERCISE_IMAGES[name] ?? MOBILITY_IMAGES[name] ?? lookupNormalized(name);
+  const source = imageUri ? { uri: imageUri } : getExerciseImageSource(name);
   const sizeStyle = fullWidth
     ? { alignSelf: 'stretch' as const, aspectRatio: 3 / 2 }
     : { width, height: Math.round(((width ?? 0) * 2) / 3) };
@@ -48,7 +60,7 @@ export function ExerciseImage({ name, muscle, width, radius = 8, fullWidth, styl
         source={source}
         style={[styles.img, sizeStyle, { borderRadius: radius }, style]}
         contentFit="cover"
-        recyclingKey={name}
+        recyclingKey={imageUri ?? name}
       />
     );
   }
@@ -64,8 +76,8 @@ export function ExerciseImage({ name, muscle, width, radius = 8, fullWidth, styl
         },
         style,
       ]}>
-      <Text style={{ color: colors.textSecondary, fontSize: Math.max(9, (width ?? 64) / 7), fontWeight: '700' }}>
-        {FALLBACK_LABELS[muscle ?? ''] ?? '—'}
+      <Text style={{ color: colors.textSecondary, fontSize: emptyLabel ? 15 : Math.max(9, (width ?? 64) / 7), fontWeight: '700' }}>
+        {emptyLabel ?? FALLBACK_LABELS[muscle ?? ''] ?? '—'}
       </Text>
     </View>
   );
@@ -90,6 +102,10 @@ function normalizeKey(value: string): string {
 }
 
 let normalizedIndex: Map<string, number> | null = null;
+
+export function getExerciseImageSource(name: string): number | undefined {
+  return EXERCISE_IMAGES[name] ?? MOBILITY_IMAGES[name] ?? lookupNormalized(name);
+}
 
 /** Retrouve une image même si le nom diffère par la casse ou les accents. */
 function lookupNormalized(name: string): number | undefined {
