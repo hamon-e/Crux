@@ -26,6 +26,7 @@ export default function ProgressionScreen() {
   const [stepsOpen, setStepsOpen] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [validating, setValidating] = useState(false);
+  const [hideMastered, setHideMastered] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,8 +70,13 @@ export default function ProgressionScreen() {
   const sameCategory = nodes
     .filter((n) => n.category === current.category)
     .sort((a, b) => TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier) || a.name.localeCompare(b.name));
-  const prerequisites = sameCategory.filter((n) => TIERS.indexOf(n.tier) < currentTierIdx);
-  const unlocks = sameCategory.filter((n) => TIERS.indexOf(n.tier) > currentTierIdx);
+  const prerequisites = sameCategory.filter(
+    (n) => TIERS.indexOf(n.tier) < currentTierIdx && (!hideMastered || !n.mastered)
+  );
+  const unlocks = sameCategory.filter(
+    (n) => TIERS.indexOf(n.tier) > currentTierIdx && (!hideMastered || !n.mastered)
+  );
+  const hasMasteredAround = sameCategory.some((n) => n.mastered && n.id !== current.id);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -78,6 +84,19 @@ export default function ProgressionScreen() {
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Text style={{ color: '#007AFF', fontWeight: '600' }}>‹ Arbre</Text>
         </Pressable>
+
+        {hasMasteredAround && (
+          <Pressable
+            style={[styles.filterButton, { borderColor: colors.backgroundSelected }]}
+            onPress={() => setHideMastered((h) => !h)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: hideMastered }}>
+            <Text style={{ fontSize: 14 }}>{hideMastered ? '☑' : '☐'}</Text>
+            <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+              Masquer les exercices réussis
+            </Text>
+          </Pressable>
+        )}
 
         <View style={styles.header}>
           <Text style={{ fontSize: 28 }}>{TIER_ICONS[current.tier]}</Text>
@@ -241,9 +260,19 @@ function SectionLabel({ text, color }: { text: string; color: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, gap: 6 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  content: { padding: 20, gap: 6 },  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
   title: { fontSize: 26, fontWeight: '800' },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
   linkLine: { width: 3, height: 16, borderRadius: 2, alignSelf: 'center', marginLeft: 30 },
   pathCard: {
     flexDirection: 'row',

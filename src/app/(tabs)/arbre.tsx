@@ -48,6 +48,7 @@ export default function SkillTreeScreen() {
   const colors = useTheme();
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
+  const [hideMastered, setHideMastered] = useState(false);
 
   useEffect(() => {
     void loadCollapsedTiers().then(setCollapsed);
@@ -85,11 +86,24 @@ export default function SkillTreeScreen() {
           {masteredCount}/{skills.length} maîtrisées · {unlockedCount} débloquées
         </Text>
 
+        <Pressable
+          style={[styles.filterButton, { borderColor: colors.backgroundSelected }]}
+          onPress={() => setHideMastered((h) => !h)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: hideMastered }}>
+          <Text style={{ fontSize: 14 }}>{hideMastered ? '☑' : '☐'}</Text>
+          <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+            Masquer les exercices réussis
+          </Text>
+        </Pressable>
+
         {DISPLAY_ORDER.map((tier, sectionIdx) => {
-          const nodes = tree[tier];
-          if (nodes.length === 0) return null;
+          const allNodes = tree[tier];
+          if (allNodes.length === 0) return null;
+          const nodes = hideMastered ? allNodes.filter((n) => !n.mastered) : allNodes;
           const tierColor = TIER_COLORS[tier];
           const isCollapsed = !!collapsed[tier];
+          if (nodes.length === 0 && isCollapsed) return null;
           return (
             <View key={tier}>
               {sectionIdx > 0 && (
@@ -103,23 +117,28 @@ export default function SkillTreeScreen() {
                 <Text style={styles.sectionIcon}>{TIER_ICONS[tier]}</Text>
                 <Text style={[styles.sectionTitle, { color: tierColor }]}>{TIER_LABELS[tier]}</Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  {nodes.filter((n) => n.mastered).length}/{nodes.length}
+                  {allNodes.filter((n) => n.mastered).length}/{allNodes.length}
                 </Text>
                 <Text style={[styles.chevron, { color: colors.textSecondary }]}>
                   {isCollapsed ? '▸' : '▾'}
                 </Text>
               </Pressable>
-              {!isCollapsed && (
-                <View style={styles.grid}>
-                  {nodes.map((node) => (
-                    <SkillCard
-                      key={node.id}
-                      node={node}
-                      onPress={() => router.push(`/progression/${node.id}`)}
-                    />
-                  ))}
-                </View>
-              )}
+              {!isCollapsed &&
+                (nodes.length > 0 ? (
+                  <View style={styles.grid}>
+                    {nodes.map((node) => (
+                      <SkillCard
+                        key={node.id}
+                        node={node}
+                        onPress={() => router.push(`/progression/${node.id}`)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+                    Tout est maîtrisé ici 🎉
+                  </Text>
+                ))}
             </View>
           );
         })}
@@ -199,6 +218,16 @@ const styles = StyleSheet.create({
   sectionIcon: { fontSize: 18 },
   sectionTitle: { fontSize: 17, fontWeight: '800', textTransform: 'uppercase', flex: 1 },
   chevron: { fontSize: 14 },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
