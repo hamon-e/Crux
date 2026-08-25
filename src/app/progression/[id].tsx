@@ -97,10 +97,6 @@ export default function ProgressionScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Text style={{ color: '#007AFF', fontWeight: '600' }}>‹ Arbre</Text>
-        </Pressable>
-
         {hasMasteredAround && (
           <Pressable
             style={[styles.filterButton, { borderColor: colors.backgroundSelected }]}
