@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -9,27 +10,27 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
-import { useSQLiteContext } from 'expo-sqlite';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
+import { useSQLiteContext } from "expo-sqlite";
 
 import {
   getExercises,
   getUnmatchedImportExercises,
   importStrongWorkouts,
   type ImportStats,
-} from '@/db/queries';
-import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from '@/db/types';
-import { parseStrongCsv, type ParsedWorkout } from '@/lib/strong-csv';
-import { useTheme } from '@/hooks/use-theme';
+} from "@/db/queries";
+import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from "@/db/types";
+import { parseStrongCsv, type ParsedWorkout } from "@/lib/strong-csv";
+import { useTheme } from "@/hooks/use-theme";
 
 async function pickCsv(): Promise<{ name: string; text: string } | null> {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === "android") {
     // Le picker natif de expo-file-system renvoie un File directement lisible
     const picked = await File.pickFileAsync({
-      mimeTypes: ['text/csv', 'text/plain', 'application/csv', '*/*'],
+      mimeTypes: ["text/csv", "text/plain", "application/csv", "*/*"],
     });
     if (picked.canceled) return null;
     const file = Array.isArray(picked.result) ? picked.result[0] : picked.result;
@@ -39,11 +40,16 @@ async function pickCsv(): Promise<{ name: string; text: string } | null> {
   const result = await DocumentPicker.getDocumentAsync({
     copyToCacheDirectory: true,
     multiple: false,
-    type: ['text/csv', 'text/comma-separated-values', 'text/plain', 'public.comma-separated-values-text'],
+    type: [
+      "text/csv",
+      "text/comma-separated-values",
+      "text/plain",
+      "public.comma-separated-values-text",
+    ],
   });
   if (result.canceled || !result.assets?.length) return null;
   const asset = result.assets[0];
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     // expo-file-system n'est pas disponible sur web : on lit le blob via fetch
     const text = await (await fetch(asset.uri)).text();
     return { name: asset.name, text };
@@ -65,7 +71,7 @@ export default function ImportScreen() {
   const [musclePickName, setMusclePickName] = useState<string | null>(null);
   const [exerciseList, setExerciseList] = useState<Exercise[]>([]);
   const [mappingName, setMappingName] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<ImportStats | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,20 +82,19 @@ export default function ImportScreen() {
     return exerciseList.filter((e) => e.name.toLowerCase().includes(q));
   }, [exerciseList, search]);
 
-  const exerciseById = useMemo(
-    () => new Map(exerciseList.map((e) => [e.id, e])),
-    [exerciseList]
-  );
+  const exerciseById = useMemo(() => new Map(exerciseList.map((e) => [e.id, e])), [exerciseList]);
 
   const unilateralCount = parsed
     ? new Set(
         parsed
-          .filter((w) => w.sets.some((s) => s.side === 'left') && w.sets.some((s) => s.side === 'right'))
+          .filter(
+            (w) => w.sets.some((s) => s.side === "left") && w.sets.some((s) => s.side === "right"),
+          )
           .flatMap((w) =>
             [...new Set(w.sets.filter((s) => s.side).map((s) => s.exerciseName))].map(
-              (name) => `${w.startedAt}|${name}`
-            )
-          )
+              (name) => `${w.startedAt}|${name}`,
+            ),
+          ),
       ).size
     : 0;
 
@@ -108,7 +113,7 @@ export default function ImportScreen() {
       const parsedWorkouts = parseStrongCsv(picked.text);
       if (parsedWorkouts.length === 0) {
         setError(
-          "Aucune séance trouvée dans ce fichier. Vérifie que c'est bien un export CSV de Strong."
+          "Aucune séance trouvée dans ce fichier. Vérifie que c'est bien un export CSV de Strong.",
         );
         return;
       }
@@ -123,7 +128,7 @@ export default function ImportScreen() {
       setUnmatched(unmatchedNames);
       setExerciseList(exercises);
     } catch (e) {
-      setError(`Impossible de lire ce fichier.${e instanceof Error ? ` (${e.message})` : ''}`);
+      setError(`Impossible de lire ce fichier.${e instanceof Error ? ` (${e.message})` : ""}`);
     } finally {
       setBusy(false);
     }
@@ -142,14 +147,14 @@ export default function ImportScreen() {
       setFileName(null);
       setError(null);
     } catch (e) {
-      setError(`Erreur pendant l'import.${e instanceof Error ? ` (${e.message})` : ''}`);
+      setError(`Erreur pendant l'import.${e instanceof Error ? ` (${e.message})` : ""}`);
     } finally {
       setBusy(false);
     }
   }
 
   function openMapping(name: string) {
-    setSearch('');
+    setSearch("");
     setMappingName(name);
   }
 
@@ -173,14 +178,15 @@ export default function ImportScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Importer depuis Strong</Text>
         <Text style={{ color: colors.textSecondary }}>
           Dans l&apos;app Strong : Réglages → Exporter les données → Format CSV. Sélectionne ensuite
-          le fichier ici. Les séances déjà présentes sont ignorées automatiquement et une routine est
-          créée pour chaque nom de séance (droite puis gauche pour les exercices unilatéraux).
+          le fichier ici. Les séances déjà présentes sont ignorées automatiquement et une routine
+          est créée pour chaque nom de séance (droite puis gauche pour les exercices unilatéraux).
         </Text>
 
         <Pressable
-          style={[styles.button, { backgroundColor: '#007AFF' }, busy && styles.disabled]}
+          style={[styles.button, { backgroundColor: "#007AFF" }, busy && styles.disabled]}
           disabled={busy}
-          onPress={() => void pickAndParse()}>
+          onPress={() => void pickAndParse()}
+        >
           <Text style={styles.buttonText}>1. Choisir un fichier CSV</Text>
         </Pressable>
 
@@ -191,15 +197,15 @@ export default function ImportScreen() {
             </Text>
             {unilateralCount > 0 && (
               <Text style={{ color: colors.textSecondary }}>
-                {unilateralCount} exercice{unilateralCount > 1 ? 's' : ''} unilatéral
-                {unilateralCount > 1 ? 'aux' : ''} détecté
-                {unilateralCount > 1 ? 's' : ''} : le 1er bloc de séries = côté droit, le 2e = côté
+                {unilateralCount} exercice{unilateralCount > 1 ? "s" : ""} unilatéral
+                {unilateralCount > 1 ? "aux" : ""} détecté
+                {unilateralCount > 1 ? "s" : ""} : le 1er bloc de séries = côté droit, le 2e = côté
                 gauche.
               </Text>
             )}
             {unmatched.length > 0 && (
               <View>
-                <Text style={{ color: colors.text, fontWeight: '700' }}>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
                   Nouveaux exercices ({unmatched.length})
                 </Text>
                 <Text style={{ color: colors.textSecondary }}>
@@ -216,22 +222,24 @@ export default function ImportScreen() {
                         </Text>
                         <Text
                           style={{
-                            color: target ? '#30D158' : colors.textSecondary,
-                            fontWeight: '600',
+                            color: target ? "#30D158" : colors.textSecondary,
+                            fontWeight: "600",
                           }}
-                          numberOfLines={1}>
-                          {target ? `→ ${target.name} ›` : 'Nouvel exercice ›'}
+                          numberOfLines={1}
+                        >
+                          {target ? `→ ${target.name} ›` : "Nouvel exercice ›"}
                         </Text>
                       </Pressable>
                       {!target && (
                         <Pressable
                           style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
                           onPress={() => {
-                            setSearch('');
+                            setSearch("");
                             setMusclePickName(name);
-                          }}>
-                          <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>
-                            {MUSCLE_LABELS[newMuscles[name] ?? 'fullbody']}
+                          }}
+                        >
+                          <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
+                            {MUSCLE_LABELS[newMuscles[name] ?? "fullbody"]}
                           </Text>
                         </Pressable>
                       )}
@@ -241,82 +249,96 @@ export default function ImportScreen() {
               </View>
             )}
             <Pressable
-              style={[styles.button, { backgroundColor: '#30D158' }, busy && styles.disabled]}
+              style={[styles.button, { backgroundColor: "#30D158" }, busy && styles.disabled]}
               disabled={busy}
-              onPress={() => void runImport()}>
+              onPress={() => void runImport()}
+            >
               <Text style={styles.buttonText}>2. Importer</Text>
             </Pressable>
           </>
         )}
 
-        {error && <Text style={{ color: '#FF453A' }}>{error}</Text>}
+        {error && <Text style={{ color: "#FF453A" }}>{error}</Text>}
 
         {stats && (
           <Text style={{ color: colors.text }}>
-            ✓ {stats.imported} séances importées · {stats.setsImported} séries ·{' '}
+            ✓ {stats.imported} séances importées · {stats.setsImported} séries ·{" "}
             {stats.exercisesCreated} nouveaux exercices
-            {stats.routinesCreated > 0 ? ` · ${stats.routinesCreated} routines créées` : ''}
-            {stats.skipped > 0 ? ` · ${stats.skipped} doublons ignorés` : ''}
+            {stats.routinesCreated > 0 ? ` · ${stats.routinesCreated} routines créées` : ""}
+            {stats.skipped > 0 ? ` · ${stats.skipped} doublons ignorés` : ""}
           </Text>
         )}
       </ScrollView>
 
-      <Modal visible={mappingName !== null} animationType="slide" transparent onRequestClose={() => setMappingName(null)}>
-        <Pressable
-          style={[styles.modalBackdrop, { backgroundColor: '#0009' }]}
-          onPress={() => setMappingName(null)}>
-          <Pressable style={[styles.modalCard, { backgroundColor: colors.background }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
-              Associer « {mappingName} »
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                { color: colors.text, borderColor: colors.backgroundSelected, marginBottom: 10 },
-              ]}
-              placeholder="Rechercher un exercice…"
-              placeholderTextColor={colors.textSecondary}
-              value={search}
-              onChangeText={setSearch}
-              autoCorrect={false}
-            />
-            <FlatList
-              style={{ maxHeight: 380 }}
-              data={filteredExercises}
-              keyExtractor={(e) => String(e.id)}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable style={styles.matchRow} onPress={() => chooseExercise(item.id)}>
-                  <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>{item.muscle}</Text>
-                </Pressable>
-              )}
-              ListEmptyComponent={
-                <Text style={{ color: colors.textSecondary, textAlign: 'center', padding: 12 }}>
-                  Aucun exercice trouvé.
-                </Text>
-              }
-            />
-            <Pressable style={styles.matchRow} onPress={() => chooseExercise(null)}>
-              <Text style={{ color: '#FF9F0A', fontWeight: '600', flex: 1 }}>
-                Créer un nouvel exercice
+      <Modal
+        visible={mappingName !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setMappingName(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardAvoidingView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Pressable
+            style={[styles.modalBackdrop, { backgroundColor: "#0009" }]}
+            onPress={() => setMappingName(null)}
+          >
+            <Pressable style={[styles.modalCard, { backgroundColor: colors.background }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
+                Associer « {mappingName} »
               </Text>
-              <Text style={{ color: colors.textSecondary }}>›</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { color: colors.text, borderColor: colors.backgroundSelected, marginBottom: 10 },
+                ]}
+                placeholder="Rechercher un exercice…"
+                placeholderTextColor={colors.textSecondary}
+                value={search}
+                onChangeText={setSearch}
+                autoCorrect={false}
+              />
+              <FlatList
+                style={{ maxHeight: 380 }}
+                data={filteredExercises}
+                keyExtractor={(e) => String(e.id)}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <Pressable style={styles.matchRow} onPress={() => chooseExercise(item.id)}>
+                    <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary }}>{item.muscle}</Text>
+                  </Pressable>
+                )}
+                ListEmptyComponent={
+                  <Text style={{ color: colors.textSecondary, textAlign: "center", padding: 12 }}>
+                    Aucun exercice trouvé.
+                  </Text>
+                }
+              />
+              <Pressable style={styles.matchRow} onPress={() => chooseExercise(null)}>
+                <Text style={{ color: "#FF9F0A", fontWeight: "600", flex: 1 }}>
+                  Créer un nouvel exercice
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>›</Text>
+              </Pressable>
             </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
         visible={musclePickName !== null}
         animationType="slide"
         transparent
-        onRequestClose={() => setMusclePickName(null)}>
+        onRequestClose={() => setMusclePickName(null)}
+      >
         <Pressable
-          style={[styles.modalBackdrop, { backgroundColor: '#0009' }]}
-          onPress={() => setMusclePickName(null)}>
+          style={[styles.modalBackdrop, { backgroundColor: "#0009" }]}
+          onPress={() => setMusclePickName(null)}
+        >
           <Pressable style={[styles.modalCard, { backgroundColor: colors.background }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
               Groupe musculaire de « {musclePickName} »
@@ -324,7 +346,7 @@ export default function ImportScreen() {
             <View style={styles.chipWrap}>
               {MUSCLES.map((m) => {
                 const active =
-                  musclePickName !== null && (newMuscles[musclePickName] ?? 'fullbody') === m;
+                  musclePickName !== null && (newMuscles[musclePickName] ?? "fullbody") === m;
                 return (
                   <Pressable
                     key={m}
@@ -337,10 +359,9 @@ export default function ImportScreen() {
                       if (!musclePickName) return;
                       setNewMuscles((prev) => ({ ...prev, [musclePickName]: m }));
                       setMusclePickName(null);
-                    }}>
-                    <Text style={{ color: active ? '#fff' : colors.text }}>
-                      {MUSCLE_LABELS[m]}
-                    </Text>
+                    }}
+                  >
+                    <Text style={{ color: active ? "#fff" : colors.text }}>{MUSCLE_LABELS[m]}</Text>
                   </Pressable>
                 );
               })}
@@ -355,9 +376,9 @@ export default function ImportScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 24, gap: 14 },
-  title: { fontSize: 28, fontWeight: '800' },
-  button: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  title: { fontSize: 28, fontWeight: "800" },
+  button: { borderRadius: 14, paddingVertical: 15, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   disabled: { opacity: 0.5 },
   input: {
     borderWidth: 1.5,
@@ -367,27 +388,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
     paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#8884',
+    borderBottomColor: "#8884",
   },
   modalBackdrop: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
+  },
+  modalKeyboardAvoidingView: {
+    flex: 1,
   },
   modalCard: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
-    maxHeight: '85%',
+    maxHeight: "85%",
+    flexShrink: 1,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 12,
   },
   muscleChip: {
@@ -396,12 +421,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     borderWidth: 1.5,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  chipActive: { backgroundColor: '#007AFF', borderColor: '#007AFF' },
+  chipActive: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
 });
