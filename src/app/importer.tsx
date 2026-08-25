@@ -23,6 +23,7 @@ import {
   type ImportStats,
 } from "@/db/queries";
 import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from "@/db/types";
+import { createExerciseMatcher } from "@/lib/exercise-matching";
 import { parseStrongCsv, type ParsedWorkout } from "@/lib/strong-csv";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -64,13 +65,14 @@ export default function ImportScreen() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedWorkout[] | null>(null);
   const [unmatched, setUnmatched] = useState<string[]>([]);
-  /** nom CSV -> id d'exercice existant (absent = créer un nouvel exercice). */
-  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  /** nom CSV -> id d'exercice existant (null = créer explicitement un nouvel exercice). */
+  const [overrides, setOverrides] = useState<Record<string, number | null>>({});
   /** nom CSV -> groupe musculaire choisi pour l'exercice importé/matché. */
   const [newMuscles, setNewMuscles] = useState<Record<string, Muscle>>({});
   const [musclePickName, setMusclePickName] = useState<string | null>(null);
   const [exerciseList, setExerciseList] = useState<Exercise[]>([]);
   const [mappingName, setMappingName] = useState<string | null>(null);
+  const [reviewVisible, setReviewVisible] = useState(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<ImportStats | null>(null);
@@ -83,6 +85,23 @@ export default function ImportScreen() {
   }, [exerciseList, search]);
 
   const exerciseById = useMemo(() => new Map(exerciseList.map((e) => [e.id, e])), [exerciseList]);
+
+  const importExerciseMatches = useMemo(() => {
+    if (!parsed) return [];
+    const matcher = createExerciseMatcher(exerciseList);
+    const names = new Set(parsed.flatMap((workout) => workout.sets.map((set) => set.exerciseName)));
+    return [...names]
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, automaticTarget: matcher.find(name) }));
+  }, [exerciseList, parsed]);
+
+  function targetFor(name: string, automaticTarget: Exercise | null) {
+    if (Object.prototype.hasOwnProperty.call(overrides, name)) {
+      const overrideId = overrides[name];
+      return overrideId === null ? null : (exerciseById.get(overrideId) ?? null);
+    }
+    return automaticTarget;
+  }
 
   const unilateralCount = parsed
     ? new Set(
@@ -106,6 +125,7 @@ export default function ImportScreen() {
     setOverrides({});
     setNewMuscles({});
     setFileName(null);
+    setReviewVisible(false);
 
     setBusy(true);
     try {
@@ -146,6 +166,7 @@ export default function ImportScreen() {
       setOverrides({});
       setNewMuscles({});
       setFileName(null);
+      setReviewVisible(false);
       setError(null);
     } catch (e) {
       setError(`Erreur pendant l'import.${e instanceof Error ? ` (${e.message})` : ""}`);
@@ -154,8 +175,9 @@ export default function ImportScreen() {
     }
   }
 
-  function openMapping(name: string) {
+  function openMapping(name: string, closeReview = false) {
     setSearch("");
+    if (closeReview) setReviewVisible(false);
     setMappingName(name);
   }
 
@@ -164,8 +186,7 @@ export default function ImportScreen() {
     const name = mappingName;
     setOverrides((prev) => {
       const next = { ...prev };
-      if (id === null) delete next[name];
-      else next[name] = id;
+      next[name] = id;
       return next;
     });
     setMappingName(null);
@@ -221,7 +242,10 @@ export default function ImportScreen() {
                   seront créés en Full body.
                 </Text>
                 {unmatched.map((name) => {
-                  const target = overrides[name] ? exerciseById.get(overrides[name]) : null;
+                  const automaticTarget =
+                    importExerciseMatches.find((match) => match.name === name)?.automaticTarget ??
+                    null;
+                  const target = targetFor(name, automaticTarget);
                   const selectedMuscle = newMuscles[name] ?? target?.muscle ?? "fullbody";
                   return (
                     <View key={name} style={styles.matchRow}>
@@ -255,6 +279,27 @@ export default function ImportScreen() {
                 })}
               </View>
             )}
+            <View style={styles.reviewSection}>
+              <View style={styles.reviewHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    Correspondances des exercices
+                  </Text>
+                  <Text style={{ color: colors.textSecondary }}>
+                    Vérifie les associations automatiques avant l&apos;import et corrige-les si
+                    besoin.
+                  </Text>
+                </View>
+                <Pressable
+                  style={[styles.reviewButton, { borderColor: colors.backgroundSelected }]}
+                  onPress={() => setReviewVisible(true)}
+                >
+                  <Text style={{ color: "#007AFF", fontWeight: "700" }}>
+                    Voir tout ({importExerciseMatches.length})
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
             <Pressable
               style={[styles.button, { backgroundColor: "#30D158" }, busy && styles.disabled]}
               disabled={busy}
@@ -334,6 +379,67 @@ export default function ImportScreen() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={reviewVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setReviewVisible(false)}
+      >
+        <Pressable
+          style={[styles.modalBackdrop, { backgroundColor: "#0009" }]}
+          onPress={() => setReviewVisible(false)}
+        >
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.background }]}>
+            <View style={styles.reviewModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 3 }]}>
+                  Vérifier les correspondances
+                </Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  Touche une ligne pour modifier son association.
+                </Text>
+              </View>
+              <Pressable onPress={() => setReviewVisible(false)} hitSlop={10}>
+                <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "700" }}>Fermer</Text>
+              </Pressable>
+            </View>
+            <FlatList
+              data={importExerciseMatches}
+              keyExtractor={(match) => match.name}
+              renderItem={({ item }) => {
+                const manuallySet = Object.prototype.hasOwnProperty.call(overrides, item.name);
+                const target = targetFor(item.name, item.automaticTarget);
+                return (
+                  <Pressable style={styles.matchRow} onPress={() => openMapping(item.name, true)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text }} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text
+                        style={{
+                          color: target ? "#30D158" : "#FF9F0A",
+                          fontWeight: "600",
+                        }}
+                        numberOfLines={1}
+                      >
+                        {target
+                          ? `→ ${target.name}${manuallySet ? " · modifié" : ""} ›`
+                          : "Nouvel exercice · modifié ›"}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={
+                <Text style={{ color: colors.textSecondary, textAlign: "center", padding: 12 }}>
+                  Aucun exercice dans ce fichier.
+                </Text>
+              }
+            />
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <Modal
@@ -436,4 +542,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipActive: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
+  reviewSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#8884",
+    paddingTop: 14,
+  },
+  reviewHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  reviewButton: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  reviewModalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 12,
+  },
 });
