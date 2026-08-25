@@ -851,23 +851,15 @@ export async function syncTemplateFromWorkout(db: SQLiteDatabase, templateId: nu
 
 // ---------- Stats ----------
 
-/** 1RM estimé via formule d'Epley : poids * (1 + reps / 30) */
-export function estimate1rm(weight: number, reps: number): number {
-  if (reps <= 0 || weight <= 0) return 0;
-  if (reps === 1) return weight;
-  return weight * (1 + reps / 30);
-}
-
 export interface ExerciseHistoryEntry {
   date: string;
   started_at: number;
-  best_1rm: number;
   volume: number;
   total_reps: number;
   top_weight: number;
   side_details?: {
-    left?: { best_1rm: number; volume: number; total_reps: number; top_weight: number };
-    right?: { best_1rm: number; volume: number; total_reps: number; top_weight: number };
+    left?: { volume: number; total_reps: number; top_weight: number };
+    right?: { volume: number; total_reps: number; top_weight: number };
   };
 }
 
@@ -876,13 +868,11 @@ export async function getExerciseHistory(db: SQLiteDatabase, exerciseId: number)
     date: string;
     started_at: number;
     side: string | null;
-    best_1rm: number;
     volume: number;
     total_reps: number;
     top_weight: number;
   }>(
     `SELECT w.date, w.started_at, s.side,
-            MAX(CASE WHEN s.reps > 0 THEN s.weight * (1 + s.reps / 30.0) ELSE 0 END) AS best_1rm,
             SUM(CASE WHEN s.done = 1 THEN s.weight * s.reps ELSE 0 END) AS volume,
             SUM(CASE WHEN s.done = 1 THEN s.reps ELSE 0 END) AS total_reps,
             MAX(s.weight) AS top_weight
@@ -898,20 +888,18 @@ export async function getExerciseHistory(db: SQLiteDatabase, exerciseId: number)
       entry = {
         date: r.date,
         started_at: r.started_at,
-        best_1rm: 0,
         volume: 0,
         total_reps: 0,
         top_weight: 0,
       };
       merged.set(r.started_at, entry);
     }
-    entry.best_1rm = Math.max(entry.best_1rm, r.best_1rm);
     entry.volume += r.volume;
     entry.total_reps += r.total_reps;
     entry.top_weight = Math.max(entry.top_weight, r.top_weight);
     if (r.side === 'left' || r.side === 'right') {
       entry.side_details ??= {};
-      const detail = { best_1rm: r.best_1rm, volume: r.volume, total_reps: r.total_reps, top_weight: r.top_weight };
+      const detail = { volume: r.volume, total_reps: r.total_reps, top_weight: r.top_weight };
       if (r.side === 'left') entry.side_details.left = detail;
       else entry.side_details.right = detail;
     }
