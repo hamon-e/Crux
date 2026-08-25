@@ -163,12 +163,12 @@ export default function ExerciseScreen() {
                       {SIDE_LABELS.right} :{' '}
                       {showSideWeights
                         ? `${sideDetails?.right?.top_weight ?? 0} kg`
-                        : `${sideDetails?.right?.total_reps ?? 0} reps`}
+                        : `${sideDetails?.right?.best_set_reps ?? 0} reps`}
                       {' · '}
                       {SIDE_LABELS.left} :{' '}
                       {showSideWeights
                         ? `${sideDetails?.left?.top_weight ?? 0} kg`
-                        : `${sideDetails?.left?.total_reps ?? 0} reps`}
+                        : `${sideDetails?.left?.best_set_reps ?? 0} reps`}
                     </Text>
                   </>
                 ) : (
@@ -176,14 +176,14 @@ export default function ExerciseScreen() {
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={{ color: colors.text }}>{h.date}</Text>
                       <Text style={{ color: colors.textSecondary }}>
-                        max {h.top_weight} kg · {h.total_reps} reps
+                        max {h.top_weight} kg · {h.best_set_reps} reps
                       </Text>
                     </View>
                     {sideDetails && (
                       <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
-                        {SIDE_LABELS.right} : {sideDetails.right?.total_reps ?? 0} reps
+                        {SIDE_LABELS.right} : {sideDetails.right?.best_set_reps ?? 0} reps
                         {' · '}
-                        {SIDE_LABELS.left} : {sideDetails.left?.total_reps ?? 0} reps
+                        {SIDE_LABELS.left} : {sideDetails.left?.best_set_reps ?? 0} reps
                         {!sideDetails.left || !sideDetails.right ? ' (côté manquant)' : ''}
                       </Text>
                     )}
