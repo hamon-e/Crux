@@ -20,7 +20,7 @@ import {
   logSeanceWorkout,
 } from '@/db/queries';
 import type { SeanceType } from '@/db/types';
-import { ROUTINE_COLORS } from '@/app/(tabs)/plus';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 import { PastDatePickerModal, formatFrDate, todayISO } from '@/components/past-date-picker';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';

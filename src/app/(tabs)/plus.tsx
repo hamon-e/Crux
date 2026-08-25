@@ -13,23 +13,13 @@ import {
 } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 import {
   REMINDER_DEFAULT_HOUR,
   REMINDER_DEFAULT_MINUTE,
   requestReminderPermission,
   syncRoutineReminder,
 } from '@/lib/reminders';
-
-export const ROUTINE_COLORS = [
-  '#4a90d9',
-  '#34c759',
-  '#ff9500',
-  '#af52de',
-  '#ff2d55',
-  '#5ac8fa',
-  '#ffd60a',
-  '#8e8e93',
-];
 
 export default function MoreScreen() {
   const db = useSQLiteContext();

@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { ExerciseImage } from '@/components/exercise-image';
-import { ROUTINE_COLORS } from '@/app/(tabs)/plus';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 import {
   deleteTemplate,
   getTemplateDetail,

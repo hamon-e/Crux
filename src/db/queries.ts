@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Exercise, SeanceType, SetSide, Template, TemplateExercise, TemplateSet, Workout, WorkoutSet } from './types';
 import { createExerciseMatcher } from '@/lib/exercise-matching';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 
 // ---------- Exercices ----------
 
@@ -1213,6 +1214,12 @@ async function createRoutinesFromImports(
   const existingTemplates = new Set(
     (await txn.getAllAsync<{ name: string }>('SELECT name FROM templates')).map((r) => r.name)
   );
+  const usedRoutineColors = new Set(
+    (await txn.getAllAsync<{ color: string }>("SELECT color FROM templates WHERE COALESCE(color, '') != ''"))
+      .map((r) => r.color)
+  );
+  let nextPaletteIndex = 0;
+  let generatedColorIndex = 0;
 
   for (const [name, ref] of importedByName) {
     if (!name.trim() || existingTemplates.has(name)) continue;
@@ -1238,8 +1245,13 @@ async function createRoutinesFromImports(
     }
     if (entries.size === 0) continue;
 
+    const color = getNextRoutineColor(
+      usedRoutineColors,
+      () => ROUTINE_COLORS[nextPaletteIndex++ % ROUTINE_COLORS.length],
+      () => getGeneratedRoutineColor(generatedColorIndex++)
+    );
     const templateId = (
-      await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', '')
+      await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', color)
     ).lastInsertRowId;
 
     let orderIndex = 0;
@@ -1260,6 +1272,52 @@ async function createRoutinesFromImports(
     existingTemplates.add(name);
     stats.routinesCreated++;
   }
+}
+
+/** Choisit une couleur inutilisée, avec un repli distinct si toute la palette est prise. */
+function getNextRoutineColor(
+  usedColors: Set<string>,
+  getPaletteColor: () => string,
+  getFallbackColor: () => string
+): string {
+  for (let i = 0; i < ROUTINE_COLORS.length; i++) {
+    const color = getPaletteColor();
+    if (!usedColors.has(color)) {
+      usedColors.add(color);
+      return color;
+    }
+  }
+
+  let color = getFallbackColor();
+  while (usedColors.has(color)) color = getFallbackColor();
+  usedColors.add(color);
+  return color;
+}
+
+function getGeneratedRoutineColor(index: number): string {
+  // L’angle d’or répartit les teintes pour rester visuellement distinctif.
+  const hue = (index * 137.508) % 360;
+  const saturation = 65 / 100;
+  const lightness = 48 / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const section = hue / 60;
+  const x = chroma * (1 - Math.abs((section % 2) - 1));
+  const [r, g, b] =
+    section < 1
+      ? [chroma, x, 0]
+      : section < 2
+        ? [x, chroma, 0]
+        : section < 3
+          ? [0, chroma, x]
+          : section < 4
+            ? [0, x, chroma]
+            : section < 5
+              ? [x, 0, chroma]
+              : [chroma, 0, x];
+  const match = 2 * lightness - chroma;
+  return `#${[r, g, b]
+    .map((value) => Math.round((value + match) * 255).toString(16).padStart(2, '0'))
+    .join('')}`;
 }
 
 /** Valeur la plus fréquente (repli : moyenne arrondie). */
