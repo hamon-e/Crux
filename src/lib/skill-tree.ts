@@ -27,9 +27,6 @@ export const TIER_COLORS: Record<Tier, string> = {
   ultimate: '#af52de',
 };
 
-/** Séances validées nécessaires pour maîtriser une compétence. */
-export const MASTERY_SESSIONS = 5;
-
 /** Progression moyenne requise dans le palier précédent pour débloquer le suivant. */
 export const UNLOCK_THRESHOLD = 0.5;
 
@@ -53,8 +50,8 @@ export function buildSkillTree(skills: SkillExercise[]): Record<Tier, SkillNode[
   const nodes: SkillNode[] = skills.map((s) => ({
     ...s,
     tier: tierOf(s.difficulty),
-    progress: Math.min(1, s.sessions / MASTERY_SESSIONS),
-    mastered: s.sessions >= MASTERY_SESSIONS,
+    progress: s.sessions > 0 ? 1 : 0,
+    mastered: s.sessions > 0,
     unlocked: false,
   }));
 

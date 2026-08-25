@@ -59,7 +59,7 @@ export interface SkillExercise {
   muscle: string;
   category: string;
   difficulty: string;
-  /** Nombre de séances terminées avec au moins une série validée. */
+  /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée. */
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
@@ -80,7 +80,7 @@ export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExerci
   );
 }
 
-/** Valide manuellement une séance pour un exercice (sans vraie séance enregistrée). */
+/** Valide manuellement un skill en ajoutant une occurrence à son historique. */
 export async function validateExerciseManually(db: SQLiteDatabase, exerciseId: number): Promise<number> {
   const day = today();
   const endedAt = Date.now();
@@ -112,12 +112,29 @@ export interface ExerciseStep {
   instructions: string;
   image: string;
   video: string;
+  validated: number;
 }
 
 export async function getExerciseSteps(db: SQLiteDatabase, exerciseId: number): Promise<ExerciseStep[]> {
   return db.getAllAsync<ExerciseStep>(
-    'SELECT * FROM exercise_steps WHERE exercise_id = ? ORDER BY step_order',
+    `SELECT es.*, CASE WHEN esp.exercise_id IS NULL THEN 0 ELSE 1 END AS validated
+     FROM exercise_steps es
+     LEFT JOIN exercise_step_progress esp
+       ON esp.exercise_id = es.exercise_id AND esp.step_order = es.step_order
+     WHERE es.exercise_id = ? ORDER BY es.step_order`,
     exerciseId
+  );
+}
+
+/** Valide une étape indépendamment du skill complet. */
+export async function validateExerciseStep(db: SQLiteDatabase, exerciseId: number, stepOrder: number) {
+  await db.runAsync(
+    `INSERT INTO exercise_step_progress (exercise_id, step_order, validated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(exercise_id, step_order) DO UPDATE SET validated_at = excluded.validated_at`,
+    exerciseId,
+    stepOrder,
+    Date.now()
   );
 }
 

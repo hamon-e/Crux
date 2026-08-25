@@ -4,11 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { getExerciseSteps, getSkillExercises, validateExerciseManually } from '@/db/queries';
+import { getExerciseSteps, getSkillExercises, validateExerciseManually, validateExerciseStep } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  MASTERY_SESSIONS,
   TIERS,
   TIER_COLORS,
   TIER_ICONS,
@@ -161,7 +160,7 @@ export default function ProgressionScreen() {
           </View>
         </View>
         <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-          {node.mastered ? '✅' : node.unlocked ? '🔓' : '🔒'} {node.sessions}/{MASTERY_SESSIONS}
+          {node.mastered ? '✅ Skill validé' : node.unlocked ? '🔓 À valider' : '🔒 Verrouillé'}
         </Text>
       </Pressable>
     );
@@ -175,8 +174,7 @@ export default function ProgressionScreen() {
           <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16, flex: 1 }}>{node.name}</Text>
         </View>
         <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
-          {node.sessions}/{MASTERY_SESSIONS} séances validées
-          {node.mastered ? ' — maîtrisée !' : ''}
+          {node.mastered ? 'Skill validé' : 'Skill non validé'}
         </Text>
         {!node.mastered && (
           <Pressable
@@ -184,7 +182,7 @@ export default function ProgressionScreen() {
             onPress={() => void handleManualValidate(node.id)}
             disabled={validating}>
             <Text style={{ color: TIER_COLORS[node.tier], fontWeight: '700' }}>
-              {validating ? 'Validation…' : '✓ Valider une séance'}
+              {validating ? 'Validation…' : '✓ Valider le skill'}
             </Text>
           </Pressable>
         )}
@@ -195,6 +193,7 @@ export default function ProgressionScreen() {
 
   function StepsList({ exerciseId, tierColor }: { exerciseId: number; tierColor: string }) {
     const [steps, setSteps] = useState<Awaited<ReturnType<typeof getExerciseSteps>>>([]);
+    const [validatingStep, setValidatingStep] = useState<number | null>(null);
     useFocusEffect(
       useCallback(() => {
         getExerciseSteps(db, exerciseId)
@@ -237,6 +236,20 @@ export default function ProgressionScreen() {
                     <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{step.reps}</Text>
                   </View>
                 )}
+                <Pressable
+                  style={[styles.stepValidateButton, { borderColor: step.validated ? '#34c759' : tierColor }]}
+                  disabled={step.validated === 1 || validatingStep === step.step_order}
+                  onPress={() => {
+                    setValidatingStep(step.step_order);
+                    void validateExerciseStep(db, exerciseId, step.step_order)
+                      .then(() => getExerciseSteps(db, exerciseId).then(setSteps))
+                      .catch((e) => console.warn('Progression : validation de l’étape impossible', e))
+                      .finally(() => setValidatingStep(null));
+                  }}>
+                  <Text style={{ color: step.validated ? '#34c759' : tierColor, fontWeight: '700', fontSize: 11 }}>
+                    {step.validated ? '✓ Validée' : validatingStep === step.step_order ? '…' : 'Valider'}
+                  </Text>
+                </Pressable>
               </View>
               {!!step.instructions && (
                 <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 6 }}>
@@ -302,6 +315,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     marginTop: 10,
+  },
+  stepValidateButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
   },
   stepCard: {
     borderRadius: 10,
