@@ -55,6 +55,8 @@ export interface Exercise {
   muscle: string;
   equipment: string;
   is_custom: number;
+  /** URI d'une image ajoutée par l'utilisateur. */
+  image_uri?: string;
   /** Vidéo démo Google Drive (compétences de la spreadsheet). */
   video_url?: string;
   /** Catégorie / difficulté (compétences de la spreadsheet uniquement). */

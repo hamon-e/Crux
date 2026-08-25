@@ -7,7 +7,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 15;
+export const DATABASE_VERSION = 16;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -35,6 +35,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await ensureColumn('exercises', 'difficulty', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'video_url', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn('exercises', 'image_uri', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'image', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'video', "TEXT NOT NULL DEFAULT ''");
@@ -56,7 +57,8 @@ CREATE TABLE IF NOT EXISTS exercises (
   category TEXT NOT NULL DEFAULT '',
   difficulty TEXT NOT NULL DEFAULT '',
   video_url TEXT NOT NULL DEFAULT '',
-  tags TEXT NOT NULL DEFAULT ''
+  tags TEXT NOT NULL DEFAULT '',
+  image_uri TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS exercise_steps (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +104,8 @@ CREATE TABLE IF NOT EXISTS exercises (
   equipment TEXT NOT NULL DEFAULT 'bodyweight',
   is_custom INTEGER NOT NULL DEFAULT 0,
   category TEXT NOT NULL DEFAULT '',
-  difficulty TEXT NOT NULL DEFAULT ''
+  difficulty TEXT NOT NULL DEFAULT '',
+  image_uri TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS workouts (
@@ -444,6 +447,35 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
   ('reminder_hour', '18'),
   ('reminder_minute', '0');
 `);
+  }
+
+  if (currentDbVersion < 16) {
+    // v16 : chaque étape de progression est aussi un exercice standard du
+    // catalogue. Elle peut ainsi être sélectionnée et suivie indépendamment
+    // de son skill parent (ex. « Dips » ou « Lower Down Tucks »).
+    const skills = await db.getAllAsync<{
+      name: string;
+      muscle: string;
+      equipment: string;
+    }>(
+      "SELECT name, muscle, equipment FROM exercises WHERE COALESCE(category, '') != ''"
+    );
+    const skillByKey = new Map(skills.map((skill) => [normalizeSkillName(skill.name), skill]));
+    await db.withTransactionAsync(async () => {
+      for (const entry of SKILL_STEPS) {
+        const parent = skillByKey.get(entry.key);
+        if (!parent) continue;
+        for (const step of entry.steps) {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO exercises (name, muscle, equipment, is_custom, tags)
+             VALUES (?, ?, ?, 0, 'strength')`,
+            step.name,
+            parent.muscle,
+            parent.equipment
+          );
+        }
+      }
+    });
   }
 
   // v14+ : synchronisation des étapes de progression (avec images) et des

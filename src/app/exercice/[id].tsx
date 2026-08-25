@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { Directory, File, Paths } from 'expo-file-system';
 import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,12 +18,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { SIDE_LABELS } from '@/components/workout-exercise-card';
-import { getExerciseById, getExerciseHistory, getExerciseSteps, updateExerciseMuscle } from '@/db/queries';
+import {
+  getExerciseById,
+  getExerciseHistory,
+  getExerciseSteps,
+  updateExerciseImage,
+  updateExerciseMuscle,
+} from '@/db/queries';
 import { MUSCLES, MUSCLE_LABELS } from '@/db/types';
-import { ExerciseImage } from '@/components/exercise-image';
+import { ExerciseImage, getExerciseImageSource } from '@/components/exercise-image';
 import { ExerciseOriginTag } from '@/components/exercise-origin-tag';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
+import { alert } from '@/lib/alert';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
 
@@ -50,6 +60,7 @@ export default function ExerciseScreen() {
   );
 
   if (!exercise) return null;
+  const currentExercise = exercise;
 
   const recent = history.slice(-12);
   const max1rm = Math.max(1, ...recent.map((h) => h.best_1rm));
@@ -65,10 +76,50 @@ export default function ExerciseScreen() {
     if (url) void Linking.openURL(url);
   }
 
+  async function handleUploadImage() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      let imageUri = asset.uri;
+      if (Platform.OS !== 'web') {
+        const imageDirectory = new Directory(Paths.document, 'exercise-images');
+        imageDirectory.create({ idempotent: true, intermediates: true });
+        const imageFile = new File(
+          imageDirectory,
+          `${currentExercise.id}-${Date.now()}${getImageExtension(asset.name, asset.mimeType)}`
+        );
+        await new File(asset.uri).copy(imageFile);
+        imageUri = imageFile.uri;
+      }
+
+      await updateExerciseImage(db, currentExercise.id, imageUri);
+      setExercise({ ...currentExercise, image_uri: imageUri });
+    } catch (error) {
+      console.warn("Impossible d'importer l'image", error);
+      alert('Image non ajoutée', "Le fichier n'a pas pu être enregistré.");
+    }
+  }
+
+  const bundledImage = getExerciseImageSource(exercise.name);
+  const imageUri = exercise.image_uri || undefined;
+  const hasImage = Boolean(coverImage || imageUri || bundledImage);
+  const handleImagePress = hasImage ? openMedia : handleUploadImage;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
-        <Pressable onPress={openMedia} disabled={!exercise.video_url}>
+        <Pressable
+          onPress={() => void handleImagePress()}
+          disabled={hasImage && !exercise.video_url}
+          accessibilityRole="button"
+          accessibilityLabel={hasImage ? 'Voir la vidéo de l’exercice' : 'Ajouter une image'}
+          accessibilityHint={hasImage ? undefined : "Ouvre le sélecteur d'images"}>
           {coverImage ? (
             <View>
               <Image source={coverImage} style={styles.hero} resizeMode="cover" />
@@ -80,7 +131,14 @@ export default function ExerciseScreen() {
               )}
             </View>
           ) : (
-            <ExerciseImage name={exercise.name} muscle={exercise.muscle} fullWidth radius={14} />
+            <ExerciseImage
+              name={exercise.name}
+              muscle={exercise.muscle}
+              imageUri={imageUri}
+              emptyLabel={!hasImage ? 'Ajouter une image' : undefined}
+              fullWidth
+              radius={14}
+            />
           )}
         </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>{exercise.name}</Text>
@@ -175,6 +233,14 @@ export default function ExerciseScreen() {
       </Modal>
     </SafeAreaView>
   );
+}
+
+function getImageExtension(name: string, mimeType?: string | null): string {
+  const match = name.match(/\.[a-z0-9]+$/i);
+  if (match) return match[0].toLowerCase();
+  if (mimeType === 'image/png') return '.png';
+  if (mimeType === 'image/webp') return '.webp';
+  return '.jpg';
 }
 
 const styles = StyleSheet.create({
