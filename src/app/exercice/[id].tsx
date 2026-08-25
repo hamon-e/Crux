@@ -27,6 +27,7 @@ import {
 } from '@/db/queries';
 import { MUSCLES, MUSCLE_LABELS } from '@/db/types';
 import { ExerciseImage, getExerciseImageSource } from '@/components/exercise-image';
+import { ExerciseOriginTag } from '@/components/exercise-origin-tag';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
@@ -146,6 +147,7 @@ export default function ExerciseScreen() {
             {MUSCLE_LABELS[exercise.muscle] ?? exercise.muscle} · {exercise.equipment} ✏️
           </Text>
         </Pressable>
+        <ExerciseOriginTag isCustom={exercise.is_custom} />
 
         <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
           <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 12 }}>

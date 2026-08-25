@@ -1022,16 +1022,21 @@ export async function setSetting(db: SQLiteDatabase, key: string, value: string)
   );
 }
 
-/** Supprime toutes les données : séances, séries, routines et exercices personnalisés. */
+/**
+ * Supprime les données créées par l'utilisateur sans toucher au catalogue livré
+ * avec l'application (exercices intégrés et étapes de progression).
+ */
 export async function deleteAllData(db: SQLiteDatabase) {
   await db.withTransactionAsync(async () => {
     await db.execAsync(`
 DELETE FROM sets;
 DELETE FROM workouts;
+DELETE FROM template_sets;
 DELETE FROM template_exercises;
 DELETE FROM templates;
-DELETE FROM exercises WHERE is_custom = 1;
 DELETE FROM activity_types;
+DELETE FROM exercise_step_progress;
+DELETE FROM exercises WHERE is_custom = 1;
 `);
   });
 }

@@ -88,8 +88,8 @@ export default function MoreScreen() {
 
   function handleDeleteAll() {
     confirm(
-      'Supprimer toutes les données',
-      'Séances, séries, routines et exercices personnalisés seront définitivement supprimés. Cette action est irréversible.',
+      'Supprimer mes données',
+      "Tes séances, séries, routines, types de séance et exercices personnels seront définitivement supprimés. Les exercices intégrés à l'app seront conservés. Cette action est irréversible.",
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -230,7 +230,7 @@ export default function MoreScreen() {
             <Text style={{ color: colors.textSecondary }}>›</Text>
           </Pressable>
           <Pressable style={[styles.dataRow, { marginTop: 4 }]} onPress={handleDeleteAll}>
-            <Text style={{ color: '#FF453A', fontWeight: '600' }}>Supprimer toutes les données</Text>
+            <Text style={{ color: '#FF453A', fontWeight: '600' }}>Supprimer mes données</Text>
             <Text style={{ color: colors.textSecondary }}>›</Text>
           </Pressable>
         </View>

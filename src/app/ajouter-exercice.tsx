@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { ExerciseImage } from '@/components/exercise-image';
+import { ExerciseOriginTag } from '@/components/exercise-origin-tag';
 import { addSet, addTemplateExercise, createExercise, getActiveWorkout, getExercises } from '@/db/queries';
 import { EQUIPMENT, MUSCLES, MUSCLE_LABELS, type Exercise } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -143,8 +144,8 @@ export default function AddExerciseScreen() {
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
                 {MUSCLE_LABELS[item.muscle] ?? item.muscle} · {item.equipment}
                 {item.tags?.includes('mobility') ? ' · mobilité' : ''}
-                {item.is_custom ? ' · perso' : ''}
               </Text>
+              <ExerciseOriginTag isCustom={item.is_custom} compact />
             </View>
             <Text style={{ color: '#007AFF' }}>+</Text>
           </Pressable>
