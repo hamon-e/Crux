@@ -7,7 +7,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 15;
+export const DATABASE_VERSION = 16;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -35,6 +35,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await ensureColumn('exercises', 'difficulty', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'video_url', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn('exercises', 'image_uri', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercises', 'tags', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'image', "TEXT NOT NULL DEFAULT ''");
   await ensureColumn('exercise_steps', 'video', "TEXT NOT NULL DEFAULT ''");
@@ -56,7 +57,8 @@ CREATE TABLE IF NOT EXISTS exercises (
   category TEXT NOT NULL DEFAULT '',
   difficulty TEXT NOT NULL DEFAULT '',
   video_url TEXT NOT NULL DEFAULT '',
-  tags TEXT NOT NULL DEFAULT ''
+  tags TEXT NOT NULL DEFAULT '',
+  image_uri TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS exercise_steps (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +104,8 @@ CREATE TABLE IF NOT EXISTS exercises (
   equipment TEXT NOT NULL DEFAULT 'bodyweight',
   is_custom INTEGER NOT NULL DEFAULT 0,
   category TEXT NOT NULL DEFAULT '',
-  difficulty TEXT NOT NULL DEFAULT ''
+  difficulty TEXT NOT NULL DEFAULT '',
+  image_uri TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS workouts (
