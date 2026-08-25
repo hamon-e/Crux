@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import {
@@ -21,6 +21,7 @@ import { SIDE_LABELS } from '@/components/workout-exercise-card';
 import {
   getExerciseById,
   getExerciseHistory,
+  getExerciseProgression,
   getExerciseSteps,
   updateExerciseImage,
   updateExerciseMuscle,
@@ -33,6 +34,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
+type ExerciseProgression = Awaited<ReturnType<typeof getExerciseProgression>>;
 
 export default function ExerciseScreen() {
   const db = useSQLiteContext();
@@ -40,6 +42,7 @@ export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [exercise, setExercise] = useState<Awaited<ReturnType<typeof getExerciseById>>>(null);
   const [history, setHistory] = useState<History>([]);
+  const [progression, setProgression] = useState<ExerciseProgression>(null);
   const [coverImage, setCoverImage] = useState<ReturnType<typeof getStepImageSource>>(null);
   const [muscleOpen, setMuscleOpen] = useState(false);
 
@@ -48,6 +51,7 @@ export default function ExerciseScreen() {
       void (async () => {
         setExercise(await getExerciseById(db, Number(id)));
         setHistory(await getExerciseHistory(db, Number(id)));
+        setProgression(await getExerciseProgression(db, Number(id)));
         getExerciseSteps(db, Number(id))
           .then((steps) => setCoverImage(getStepImageSource(steps.find((s) => s.image)?.image)))
           .catch((e) => console.warn('Impossible de lire les étapes', e));
@@ -141,6 +145,17 @@ export default function ExerciseScreen() {
           </Text>
         </Pressable>
         <ExerciseOriginTag isCustom={exercise.is_custom} />
+
+        {progression && (
+          <Pressable
+            style={[styles.progressionButton, { borderColor: colors.backgroundSelected }]}
+            onPress={() => router.push(`/progression/${progression.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Voir la progression ${progression.name}`}>
+            <Text style={[styles.progressionButtonTitle, { color: colors.text }]}>↗ Voir la progression</Text>
+            <Text style={{ color: colors.textSecondary }}>{progression.name}</Text>
+          </Pressable>
+        )}
 
         <View style={[styles.card, { backgroundColor: colors.backgroundElement, gap: 6 }]}>
           <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 4 }}>
@@ -255,6 +270,13 @@ const styles = StyleSheet.create({
   },
   playIcon: { color: '#fff', fontSize: 13 },
   playLabel: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  progressionButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 14,
+    gap: 4,
+  },
+  progressionButtonTitle: { fontWeight: '800' },
   card: { borderRadius: 14, padding: 16 },
   modalBackdrop: {
     flex: 1,
