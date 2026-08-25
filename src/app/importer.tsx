@@ -114,7 +114,9 @@ export default function ImportScreen() {
       }
       const [unmatchedNames, exercises] = await Promise.all([
         getUnmatchedImportExercises(db, parsedWorkouts),
-        getExercises(db),
+        // Le matching manuel doit proposer tout le catalogue, y compris les
+        // exercices de force qui ont une catégorie de progression.
+        getExercises(db, undefined, undefined, undefined, true),
       ]);
       setFileName(picked.name);
       setParsed(parsedWorkouts);
