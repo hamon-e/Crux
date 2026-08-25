@@ -103,8 +103,12 @@ export default function AddExerciseScreen() {
               <Text
                 style={[
                   styles.chip,
+                  {
+                    color: colors.text,
+                    borderColor: colors.backgroundSelected,
+                    backgroundColor: colors.backgroundElement,
+                  },
                   tagFilter === item.value && styles.chipActive,
-                  { borderColor: colors.backgroundSelected },
                 ]}>
                 {item.label}
               </Text>
@@ -121,8 +125,12 @@ export default function AddExerciseScreen() {
               <Text
                 style={[
                   styles.chip,
+                  {
+                    color: colors.text,
+                    borderColor: colors.backgroundSelected,
+                    backgroundColor: colors.backgroundElement,
+                  },
                   muscleFilter === item && styles.chipActive,
-                  { borderColor: colors.backgroundSelected },
                 ]}>
                 {item === null ? 'Tous' : MUSCLE_LABELS[item] ?? item}
               </Text>
@@ -167,7 +175,17 @@ export default function AddExerciseScreen() {
             <View style={styles.optionRow}>
               {[...MUSCLES].map((m) => (
                 <TouchableOpacity key={m} onPress={() => setNewMuscle(m)}>
-                  <Text style={[styles.chip, newMuscle === m && styles.chipActive, { borderColor: colors.backgroundSelected }]}>
+                  <Text
+                    style={[
+                      styles.chip,
+                      {
+                        color: colors.text,
+                        borderColor: colors.backgroundSelected,
+                        backgroundColor: colors.backgroundElement,
+                      },
+                      newMuscle === m && styles.chipActive,
+                    ]}
+                  >
                     {MUSCLE_LABELS[m]}
                   </Text>
                 </TouchableOpacity>
@@ -177,7 +195,17 @@ export default function AddExerciseScreen() {
             <View style={styles.optionRow}>
               {[...EQUIPMENT].map((eq) => (
                 <TouchableOpacity key={eq} onPress={() => setNewEquipment(eq)}>
-                  <Text style={[styles.chip, newEquipment === eq && styles.chipActive, { borderColor: colors.backgroundSelected }]}>
+                  <Text
+                    style={[
+                      styles.chip,
+                      {
+                        color: colors.text,
+                        borderColor: colors.backgroundSelected,
+                        backgroundColor: colors.backgroundElement,
+                      },
+                      newEquipment === eq && styles.chipActive,
+                    ]}
+                  >
                     {eq}
                   </Text>
                 </TouchableOpacity>
