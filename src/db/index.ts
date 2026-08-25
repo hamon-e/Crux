@@ -7,7 +7,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 14;
+export const DATABASE_VERSION = 15;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -433,6 +433,17 @@ WHERE name IN (SELECT name FROM _mobility);
 DROP TABLE _mobility;
 `);
     });
+  }
+
+  if (currentDbVersion < 15) {
+    // v15 : les rappels de routine sont activés par défaut. INSERT OR IGNORE
+    // conserve le choix d'un utilisateur qui a déjà désactivé le rappel.
+    await db.execAsync(`
+INSERT OR IGNORE INTO settings (key, value) VALUES
+  ('reminder_enabled', '1'),
+  ('reminder_hour', '18'),
+  ('reminder_minute', '0');
+`);
   }
 
   // v14+ : synchronisation des étapes de progression (avec images) et des
