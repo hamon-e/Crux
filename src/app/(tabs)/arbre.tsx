@@ -23,9 +23,9 @@ type DisplayTier = (typeof DISPLAY_ORDER)[number];
 type SkillFilter = 'all' | 'mastered' | 'unmastered';
 
 const SKILL_FILTERS: { value: SkillFilter; label: string }[] = [
-  { value: 'all', label: 'Tous les exos' },
-  { value: 'mastered', label: 'Juste les réussis' },
-  { value: 'unmastered', label: 'Masquer les réussis' },
+  { value: 'all', label: 'Tous' },
+  { value: 'mastered', label: 'Validés' },
+  { value: 'unmastered', label: 'À valider' },
 ];
 
 const COLLAPSED_FILE = 'arbre-collapsed.json';
@@ -93,7 +93,7 @@ export default function SkillTreeScreen() {
         </Text>
 
         <View
-          style={[styles.filterControl, { borderColor: colors.backgroundSelected }]}
+          style={[styles.filterControl, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
           accessibilityRole="radiogroup"
           accessibilityLabel="Filtrer les exercices">
           {SKILL_FILTERS.map((filter) => {
@@ -103,7 +103,10 @@ export default function SkillTreeScreen() {
                 key={filter.value}
                 style={[
                   styles.filterOption,
-                  selected && { backgroundColor: colors.backgroundSelected },
+                  {
+                    backgroundColor: selected ? colors.text : colors.background,
+                    borderColor: selected ? colors.text : colors.border,
+                  },
                 ]}
                 onPress={() => setSkillFilter(filter.value)}
                 accessibilityRole="radio"
@@ -111,7 +114,7 @@ export default function SkillTreeScreen() {
                 <Text
                   style={[
                     styles.filterOptionText,
-                    { color: selected ? colors.text : colors.textSecondary },
+                    { color: selected ? colors.background : colors.text },
                     selected && styles.filterOptionTextSelected,
                   ]}>
                   {filter.label}
@@ -247,9 +250,10 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 14 },
   filterControl: {
     flexDirection: 'row',
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: 4,
+    borderWidth: 1,
     borderRadius: 10,
-    padding: 3,
+    padding: 4,
     alignSelf: 'stretch',
   },
   filterOption: {
@@ -257,8 +261,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 7,
+    borderWidth: 1,
     paddingHorizontal: 6,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   filterOptionText: {
     fontSize: 12,
