@@ -34,7 +34,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
-type ExerciseProgression = Awaited<ReturnType<typeof getExerciseProgression>>;
+type ProgressionReference = Awaited<ReturnType<typeof getExerciseProgression>>;
 
 export default function ExerciseScreen() {
   const db = useSQLiteContext();
@@ -42,14 +42,21 @@ export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [exercise, setExercise] = useState<Awaited<ReturnType<typeof getExerciseById>>>(null);
   const [history, setHistory] = useState<History>([]);
-  const [progression, setProgression] = useState<ExerciseProgression>(null);
+  const [progression, setProgression] = useState<ProgressionReference>(null);
   const [coverImage, setCoverImage] = useState<ReturnType<typeof getStepImageSource>>(null);
   const [muscleOpen, setMuscleOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       void (async () => {
-        setExercise(await getExerciseById(db, Number(id)));
+        const selectedExercise = await getExerciseById(db, Number(id));
+        // Une progression a sa propre vue : elle ne doit jamais être présentée
+        // comme un exercice, même si une ancienne URL y mène.
+        if (selectedExercise?.category) {
+          router.replace(`/progression/${selectedExercise.id}`);
+          return;
+        }
+        setExercise(selectedExercise);
         setHistory(await getExerciseHistory(db, Number(id)));
         setProgression(await getExerciseProgression(db, Number(id)));
         getExerciseSteps(db, Number(id))

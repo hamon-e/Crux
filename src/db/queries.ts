@@ -22,10 +22,10 @@ export async function getExercises(
   search?: string,
   muscle?: string,
   tag?: string,
-  includeSkillExercises = false,
+  includeProgressions = false,
 ): Promise<Exercise[]> {
   const conditions: string[] = [];
-  if (!includeSkillExercises) {
+  if (!includeProgressions) {
     conditions.push("COALESCE(category, '') = ''");
   }
   const params: (string | number)[] = [];
@@ -64,20 +64,20 @@ export async function getExerciseById(db: SQLiteDatabase, id: number): Promise<E
   return db.getFirstAsync<Exercise>("SELECT * FROM exercises WHERE id = ?", id);
 }
 
-export interface ExerciseProgression {
+export interface ProgressionReference {
   id: number;
   name: string;
 }
 
-/** Renvoie la progression d'un skill ou la progression parente d'une étape. */
+/** Renvoie la progression d'une étape, ou elle-même lorsqu'il s'agit déjà d'une progression. */
 export async function getExerciseProgression(
   db: SQLiteDatabase,
   exerciseId: number,
-): Promise<ExerciseProgression | null> {
+): Promise<ProgressionReference | null> {
   const exercise = await getExerciseById(db, exerciseId);
   if (!exercise) return null;
 
-  // Les exercices parents portent une catégorie de progression.
+  // Les progressions portent une catégorie dédiée.
   if (exercise.category) return { id: exercise.id, name: exercise.name };
 
   const progressionKey = SKILL_STEPS.find((entry) =>
@@ -85,8 +85,8 @@ export async function getExerciseProgression(
   )?.key;
   if (!progressionKey) return null;
 
-  const progression = (await getSkillExercises(db)).find(
-    (skill) => normalizeSkillName(skill.name) === progressionKey,
+  const progression = (await getProgressions(db)).find(
+    (item) => normalizeSkillName(item.name) === progressionKey,
   );
   return progression ? { id: progression.id, name: progression.name } : null;
 }
@@ -103,9 +103,10 @@ export async function updateExerciseImage(
   await db.runAsync("UPDATE exercises SET image_uri = ? WHERE id = ?", imageUri, exerciseId);
 }
 
-// ---------- Arbre de compétences ----------
+// ---------- Progressions ----------
 
-export interface SkillExercise {
+/** Une progression affichée dans l'arbre de compétences. */
+export interface Progression {
   id: number;
   name: string;
   muscle: string;
@@ -118,7 +119,7 @@ export interface SkillExercise {
   cover_image?: string | null;
 }
 
-const SKILL_TIER_ORDER: Record<string, number> = {
+const PROGRESSION_TIER_ORDER: Record<string, number> = {
   fundamental: 0,
   beginner: 1,
   intermediate: 2,
@@ -126,22 +127,24 @@ const SKILL_TIER_ORDER: Record<string, number> = {
   ultimate: 4,
 };
 
-function skillTierOrder(difficulty: string): number {
+function progressionTierOrder(difficulty: string): number {
   // Même comportement que l'arbre : une difficulté inconnue est placée au
-  // dernier palier et ne valide donc pas de skill situé au-dessus d'elle.
-  return SKILL_TIER_ORDER[difficulty] ?? SKILL_TIER_ORDER.ultimate;
+  // dernier palier et ne valide donc pas de progression située au-dessus.
+  return PROGRESSION_TIER_ORDER[difficulty] ?? PROGRESSION_TIER_ORDER.ultimate;
 }
 
 /**
- * Déduit les skills acquis depuis les exercices réalisés. Une étape de
- * progression valide son skill parent ; un skill acquis valide également les
+ * Déduit les progressions acquises depuis les exercices réalisés. Une étape de
+ * progression valide sa progression parente ; une progression acquise valide également les
  * prérequis des paliers précédents de sa catégorie.
  */
-function getSkillsCompletedFromHistory(
-  skills: Pick<SkillExercise, "id" | "name" | "category" | "difficulty">[],
+function getProgressionsCompletedFromHistory(
+  progressions: Pick<Progression, "id" | "name" | "category" | "difficulty">[],
   historicalExerciseNames: Iterable<string>,
 ): Set<number> {
-  const skillByKey = new Map(skills.map((skill) => [normalizeSkillName(skill.name), skill]));
+  const progressionByKey = new Map(
+    progressions.map((progression) => [normalizeSkillName(progression.name), progression]),
+  );
   const parentsByStepKey = new Map<string, Set<string>>();
   for (const entry of SKILL_STEPS) {
     for (const step of entry.steps) {
@@ -155,26 +158,26 @@ function getSkillsCompletedFromHistory(
   const completed = new Set<number>();
   for (const name of historicalExerciseNames) {
     const key = normalizeSkillName(name);
-    const directSkill = skillByKey.get(key);
-    if (directSkill) completed.add(directSkill.id);
+    const directProgression = progressionByKey.get(key);
+    if (directProgression) completed.add(directProgression.id);
     for (const parentKey of parentsByStepKey.get(key) ?? []) {
-      const parent = skillByKey.get(parentKey);
+      const parent = progressionByKey.get(parentKey);
       if (parent) completed.add(parent.id);
     }
   }
 
-  // On prend une photo des skills directement atteints : les prérequis ainsi
+  // On prend une photo des progressions directement atteintes : les prérequis ainsi
   // ajoutés ne doivent pas, à leur tour, valider d'autres catégories.
   for (const completedId of [...completed]) {
-    const target = skills.find((skill) => skill.id === completedId);
+    const target = progressions.find((progression) => progression.id === completedId);
     if (!target) continue;
-    const targetTier = skillTierOrder(target.difficulty);
-    for (const skill of skills) {
+    const targetTier = progressionTierOrder(target.difficulty);
+    for (const progression of progressions) {
       if (
-        skill.category === target.category &&
-        skillTierOrder(skill.difficulty) <= targetTier
+        progression.category === target.category &&
+        progressionTierOrder(progression.difficulty) <= targetTier
       ) {
-        completed.add(skill.id);
+        completed.add(progression.id);
       }
     }
   }
@@ -182,8 +185,8 @@ function getSkillsCompletedFromHistory(
   return completed;
 }
 
-export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExercise[]> {
-  const skills = await db.getAllAsync<SkillExercise>(
+export async function getProgressions(db: SQLiteDatabase): Promise<Progression[]> {
+  const progressions = await db.getAllAsync<Progression>(
     `SELECT e.id, e.name, e.muscle,
             COALESCE(e.category, '') AS category,
             COALESCE(e.difficulty, '') AS difficulty,
@@ -202,37 +205,37 @@ export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExerci
      JOIN workouts w ON w.id = s.workout_id
      WHERE w.completed = 1 AND s.done = 1`,
   );
-  const completedSkillIds = getSkillsCompletedFromHistory(
-    skills,
+  const completedProgressionIds = getProgressionsCompletedFromHistory(
+    progressions,
     historicalExercises.map((exercise) => exercise.name),
   );
 
-  return skills.map((skill) =>
-    completedSkillIds.has(skill.id) && skill.sessions === 0
-      ? { ...skill, sessions: 1 }
-      : skill,
+  return progressions.map((progression) =>
+    completedProgressionIds.has(progression.id) && progression.sessions === 0
+      ? { ...progression, sessions: 1 }
+      : progression,
   );
 }
 
-/** Valide manuellement un skill en ajoutant une occurrence à son historique. */
-export async function validateExerciseManually(
+/** Valide manuellement une progression en ajoutant une occurrence à son historique. */
+export async function validateProgressionManually(
   db: SQLiteDatabase,
-  exerciseId: number,
+  progressionId: number,
 ): Promise<number> {
-  const [workoutId] = await validateExercisesManually(db, [exerciseId]);
+  const [workoutId] = await validateProgressionsManually(db, [progressionId]);
   return workoutId;
 }
 
-/** Valide plusieurs skills manuellement dans une seule transaction. */
-export async function validateExercisesManually(
+/** Valide plusieurs progressions manuellement dans une seule transaction. */
+export async function validateProgressionsManually(
   db: SQLiteDatabase,
-  exerciseIds: number[],
+  progressionIds: number[],
 ): Promise<number[]> {
   const day = today();
   const endedAt = Date.now();
   const workoutIds: number[] = [];
   await db.withTransactionAsync(async () => {
-    for (const exerciseId of [...new Set(exerciseIds)]) {
+    for (const progressionId of [...new Set(progressionIds)]) {
       const result = await db.runAsync(
         "INSERT INTO workouts (name, date, started_at, ended_at, completed) VALUES (?, ?, ?, ?, 1)",
         "Validation manuelle",
@@ -245,7 +248,7 @@ export async function validateExercisesManually(
       await db.runAsync(
         "INSERT INTO sets (workout_id, exercise_id, weight, reps, done, set_order) VALUES (?, ?, 0, 0, 1, 0)",
         workoutId,
-        exerciseId,
+        progressionId,
       );
     }
   });

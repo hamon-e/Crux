@@ -5,7 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { File, Paths } from 'expo-file-system';
 
-import { getSkillExercises } from '@/db/queries';
+import { getProgressions } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -72,7 +72,7 @@ export default function SkillTreeScreen() {
     useCallback(() => {
       void (async () => {
         try {
-          setSkills(Object.values(buildSkillTree(await getSkillExercises(db))).flat());
+          setSkills(Object.values(buildSkillTree(await getProgressions(db))).flat());
         } catch (e) {
           console.warn('Arbre : impossible de lire les compétences', e);
         }
@@ -95,7 +95,7 @@ export default function SkillTreeScreen() {
         <View
           style={[styles.filterControl, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
           accessibilityRole="radiogroup"
-          accessibilityLabel="Filtrer les exercices">
+          accessibilityLabel="Filtrer les progressions">
           {SKILL_FILTERS.map((filter) => {
             const selected = skillFilter === filter.value;
             return (
@@ -168,7 +168,7 @@ export default function SkillTreeScreen() {
                   </View>
                 ) : (
                   <Text style={{ color: colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
-                    {skillFilter === 'mastered' ? 'Aucun exercice réussi ici.' : 'Tout est maîtrisé ici 🎉'}
+                    {skillFilter === 'mastered' ? 'Aucune progression validée ici.' : 'Tout est maîtrisé ici 🎉'}
                   </Text>
                 ))}
             </View>
@@ -227,7 +227,7 @@ function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) 
         />
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
-        {node.mastered ? 'Skill validé' : node.unlocked ? 'Skill à valider' : 'Skill verrouillé'}
+        {node.mastered ? 'Progression validée' : node.unlocked ? 'Progression à valider' : 'Progression verrouillée'}
       </Text>
     </Pressable>
   );
