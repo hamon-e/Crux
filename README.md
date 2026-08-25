@@ -1,5 +1,13 @@
 # Welcome to your Expo app 👋
 
+## 📱 Télécharger l'app
+
+Dernière version (APK Android) : **[test_app-1.5.0-release.apk](https://github.com/hamon-e/test_app/releases/latest/download/test_app-1.5.0-release.apk)**
+
+> Toutes les versions : https://github.com/hamon-e/test_app/releases
+>
+> Installation : télécharger l'APK, l'ouvrir sur un téléphone Android 7.0+ et autoriser l'installation depuis cette source si demandé.
+
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
