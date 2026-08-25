@@ -11,6 +11,7 @@ import {
   getWorkoutDetail,
 } from '@/db/queries';
 import { SIDE_LABELS } from '@/components/workout-exercise-card';
+import { ExerciseImage } from '@/components/exercise-image';
 import type { WorkoutSet } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
@@ -73,10 +74,13 @@ export default function WorkoutDetailScreen() {
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}
             onPress={() => router.push(`/exercice/${group.exercise.id}`)}
             android_ripple={{ color: colors.border }}>
-            <Text style={[styles.exerciseName, { color: colors.text }]}>
-            {group.exercise.name}
-            {group.side ? ` — ${SIDE_LABELS[group.side]}` : ''}
-          </Text>
+            <View style={styles.exerciseHeader}>
+              <ExerciseImage name={group.exercise.name} muscle={group.exercise.muscle} width={56} radius={6} />
+              <Text style={[styles.exerciseName, styles.exerciseHeaderText, { color: colors.text }]}>
+                {group.exercise.name}
+                {group.side ? ` — ${SIDE_LABELS[group.side]}` : ''}
+              </Text>
+            </View>
             {group.sets
               .filter((s) => s.done)
               .map((s, i) => (
@@ -134,7 +138,9 @@ const styles = StyleSheet.create({
   content: { padding: 24, gap: 12 },
   title: { fontSize: 28, fontWeight: '800' },
   card: { borderRadius: 14, padding: 16 },
-  exerciseName: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  exerciseHeaderText: { flex: 1 },
+  exerciseName: { fontSize: 16, fontWeight: '700' },
   setLine: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 32 },
   button: {
