@@ -34,10 +34,6 @@ import { alert } from '@/lib/alert';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
 
-const CHART_HEIGHT = 130;
-const LABEL_SPACE = 34;
-const BAR_MAX = CHART_HEIGHT - LABEL_SPACE;
-
 export default function ExerciseScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
@@ -61,9 +57,6 @@ export default function ExerciseScreen() {
 
   if (!exercise) return null;
   const currentExercise = exercise;
-
-  const recent = history.slice(-12);
-  const max1rm = Math.max(1, ...recent.map((h) => h.best_1rm));
 
   async function handleMuscleChange(muscle: string) {
     await updateExerciseMuscle(db, exercise!.id, muscle);
@@ -148,36 +141,6 @@ export default function ExerciseScreen() {
           </Text>
         </Pressable>
         <ExerciseOriginTag isCustom={exercise.is_custom} />
-
-        <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 12 }}>
-            1RM estimé par séance
-          </Text>
-          <View style={styles.chartRow}>
-            {recent.length === 0 && (
-              <Text style={{ color: colors.textSecondary }}>Pas encore de données.</Text>
-            )}
-            {recent.map((h) => (
-              <View key={h.started_at} style={styles.barColumn}>
-                <Text style={{ fontSize: 9, color: colors.textSecondary }}>
-                  {Math.round(h.best_1rm)}
-                </Text>
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: Math.max(4, (h.best_1rm / max1rm) * BAR_MAX),
-                      backgroundColor: '#007AFF',
-                    },
-                  ]}
-                />
-                <Text style={{ fontSize: 9, color: colors.textSecondary }}>
-                  {h.date.slice(8, 10)}/{h.date.slice(5, 7)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
 
         <View style={[styles.card, { backgroundColor: colors.backgroundElement, gap: 6 }]}>
           <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 4 }}>
@@ -268,24 +231,6 @@ const styles = StyleSheet.create({
   playIcon: { color: '#fff', fontSize: 13 },
   playLabel: { color: '#fff', fontWeight: '700', fontSize: 13 },
   card: { borderRadius: 14, padding: 16 },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 130,
-    gap: 6,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
-    gap: 4,
-  },
-  bar: {
-    width: '100%',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-  },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
