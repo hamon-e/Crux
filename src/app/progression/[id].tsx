@@ -195,6 +195,7 @@ export default function ProgressionScreen() {
 
   function StepsList({ exerciseId, tierColor }: { exerciseId: number; tierColor: string }) {
     const [steps, setSteps] = useState<Awaited<ReturnType<typeof getExerciseSteps>>>([]);
+    const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
     useFocusEffect(
       useCallback(() => {
         getExerciseSteps(db, exerciseId)
@@ -212,7 +213,12 @@ export default function ProgressionScreen() {
         </Pressable>
         {stepsOpen &&
           steps.map((step, i) => (
-            <View key={step.id} style={[styles.stepCard, { backgroundColor: colors.backgroundSelected }]}>
+            <Pressable
+              key={step.id}
+              style={[styles.stepCard, { backgroundColor: colors.backgroundSelected }]}
+              onPress={() => setExpandedSteps((current) => ({ ...current, [step.id]: !current[step.id] }))}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: !!expandedSteps[step.id] }}>
               <View style={styles.stepHeader}>
                 {(() => {
                   const src = getStepImageSource(step.image);
@@ -232,18 +238,22 @@ export default function ProgressionScreen() {
                   );
                 })()}
                 <Text style={{ color: colors.text, fontWeight: '700', flex: 1 }}>{step.name}</Text>
-                {!!step.reps && (
-                  <View style={styles.repsChip}>
-                    <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{step.reps}</Text>
-                  </View>
-                )}
               </View>
-              {!!step.instructions && (
-                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 6 }}>
-                  {step.instructions.trim()}
-                </Text>
+              {expandedSteps[step.id] && (
+                <View style={styles.stepDetails}>
+                  {!!step.reps && (
+                    <View style={styles.repsChip}>
+                      <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{step.reps}</Text>
+                    </View>
+                  )}
+                  {!!step.instructions && (
+                    <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                      {step.instructions.trim()}
+                    </Text>
+                  )}
+                </View>
               )}
-            </View>
+            </Pressable>
           ))}
       </View>
     );
@@ -308,6 +318,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepDetails: { gap: 6, marginTop: 6 },
   stepBadge: {
     width: 22,
     height: 22,
