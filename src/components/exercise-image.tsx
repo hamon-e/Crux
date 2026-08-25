@@ -109,10 +109,10 @@ let skillImageIndex: Map<string, number | { uri: string }> | null = null;
 
 export function getExerciseImageSource(name: string): number | { uri: string } | undefined {
   return (
-    EXERCISE_IMAGES[name] ??
     MOBILITY_IMAGES[name] ??
-    lookupNormalized(name) ??
-    lookupSkillImage(name)
+    lookupSkillImage(name) ??
+    EXERCISE_IMAGES[name] ??
+    lookupNormalized(name)
   );
 }
 
