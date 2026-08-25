@@ -111,14 +111,79 @@ export interface SkillExercise {
   muscle: string;
   category: string;
   difficulty: string;
-  /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée. */
+  /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée.
+   * Les prérequis déduits de l'historique ont au minimum la valeur 1. */
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
 }
 
+const SKILL_TIER_ORDER: Record<string, number> = {
+  fundamental: 0,
+  beginner: 1,
+  intermediate: 2,
+  advanced: 3,
+  ultimate: 4,
+};
+
+function skillTierOrder(difficulty: string): number {
+  // Même comportement que l'arbre : une difficulté inconnue est placée au
+  // dernier palier et ne valide donc pas de skill situé au-dessus d'elle.
+  return SKILL_TIER_ORDER[difficulty] ?? SKILL_TIER_ORDER.ultimate;
+}
+
+/**
+ * Déduit les skills acquis depuis les exercices réalisés. Une étape de
+ * progression valide son skill parent ; un skill acquis valide également les
+ * prérequis des paliers précédents de sa catégorie.
+ */
+function getSkillsCompletedFromHistory(
+  skills: Pick<SkillExercise, "id" | "name" | "category" | "difficulty">[],
+  historicalExerciseNames: Iterable<string>,
+): Set<number> {
+  const skillByKey = new Map(skills.map((skill) => [normalizeSkillName(skill.name), skill]));
+  const parentsByStepKey = new Map<string, Set<string>>();
+  for (const entry of SKILL_STEPS) {
+    for (const step of entry.steps) {
+      const stepKey = normalizeSkillName(step.name);
+      const parents = parentsByStepKey.get(stepKey) ?? new Set<string>();
+      parents.add(entry.key);
+      parentsByStepKey.set(stepKey, parents);
+    }
+  }
+
+  const completed = new Set<number>();
+  for (const name of historicalExerciseNames) {
+    const key = normalizeSkillName(name);
+    const directSkill = skillByKey.get(key);
+    if (directSkill) completed.add(directSkill.id);
+    for (const parentKey of parentsByStepKey.get(key) ?? []) {
+      const parent = skillByKey.get(parentKey);
+      if (parent) completed.add(parent.id);
+    }
+  }
+
+  // On prend une photo des skills directement atteints : les prérequis ainsi
+  // ajoutés ne doivent pas, à leur tour, valider d'autres catégories.
+  for (const completedId of [...completed]) {
+    const target = skills.find((skill) => skill.id === completedId);
+    if (!target) continue;
+    const targetTier = skillTierOrder(target.difficulty);
+    for (const skill of skills) {
+      if (
+        skill.category === target.category &&
+        skillTierOrder(skill.difficulty) <= targetTier
+      ) {
+        completed.add(skill.id);
+      }
+    }
+  }
+
+  return completed;
+}
+
 export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExercise[]> {
-  return db.getAllAsync<SkillExercise>(
+  const skills = await db.getAllAsync<SkillExercise>(
     `SELECT e.id, e.name, e.muscle,
             COALESCE(e.category, '') AS category,
             COALESCE(e.difficulty, '') AS difficulty,
@@ -129,6 +194,23 @@ export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExerci
      FROM exercises e
      WHERE COALESCE(e.category, '') != ''
      ORDER BY e.name`,
+  );
+  const historicalExercises = await db.getAllAsync<{ name: string }>(
+    `SELECT DISTINCT e.name
+     FROM exercises e
+     JOIN sets s ON s.exercise_id = e.id
+     JOIN workouts w ON w.id = s.workout_id
+     WHERE w.completed = 1 AND s.done = 1`,
+  );
+  const completedSkillIds = getSkillsCompletedFromHistory(
+    skills,
+    historicalExercises.map((exercise) => exercise.name),
+  );
+
+  return skills.map((skill) =>
+    completedSkillIds.has(skill.id) && skill.sessions === 0
+      ? { ...skill, sessions: 1 }
+      : skill,
   );
 }
 
