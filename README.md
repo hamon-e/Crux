@@ -7,8 +7,13 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 1. Install dependencies
 
    ```bash
-   npm install
+   pnpm install
    ```
+
+   `pnpm` stores package contents in a shared, content-addressable store. This
+   means separate T3 Code worktrees keep isolated `node_modules` links while
+   reusing the same dependency data instead of downloading and copying every
+   package again.
 
 2. Start the app
 
