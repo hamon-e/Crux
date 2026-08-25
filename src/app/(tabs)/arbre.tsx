@@ -9,7 +9,6 @@ import { getSkillExercises } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  MASTERY_SESSIONS,
   TIER_COLORS,
   TIER_ICONS,
   TIER_LABELS,
@@ -195,9 +194,7 @@ function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) 
         />
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
-        {node.mastered
-          ? `Maîtrisée (${MASTERY_SESSIONS} séances)`
-          : `${node.sessions}/${MASTERY_SESSIONS} séances`}
+        {node.mastered ? 'Skill validé' : node.unlocked ? 'Skill à valider' : 'Skill verrouillé'}
       </Text>
     </Pressable>
   );

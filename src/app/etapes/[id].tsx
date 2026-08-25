@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { getExerciseById, getExerciseSteps } from '@/db/queries';
+import { getExerciseById, getExerciseSteps, validateExerciseStep } from '@/db/queries';
 import type { Exercise } from '@/db/types';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
@@ -17,6 +17,7 @@ export default function EtapesScreen() {
   const exerciseId = Number(id);
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [steps, setSteps] = useState<Awaited<ReturnType<typeof getExerciseSteps>>>([]);
+  const [validatingStep, setValidatingStep] = useState<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,6 +66,20 @@ export default function EtapesScreen() {
                   <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>{step.reps}</Text>
                 </View>
               )}
+              <Pressable
+                style={[styles.validateButton, { borderColor: step.validated ? '#34c759' : tierColor }]}
+                disabled={step.validated === 1 || validatingStep === step.step_order}
+                onPress={() => {
+                  setValidatingStep(step.step_order);
+                  void validateExerciseStep(db, exerciseId, step.step_order)
+                    .then(() => getExerciseSteps(db, exerciseId).then(setSteps))
+                    .catch((e) => console.warn('Validation de l’étape impossible', e))
+                    .finally(() => setValidatingStep(null));
+                }}>
+                <Text style={{ color: step.validated ? '#34c759' : tierColor, fontWeight: '700', fontSize: 11 }}>
+                  {step.validated ? '✓ Validée' : validatingStep === step.step_order ? '…' : 'Valider'}
+                </Text>
+              </Pressable>
             </View>
             {(() => {
               const src = getStepImageSource(step.image);
@@ -130,6 +145,12 @@ const styles = StyleSheet.create({
     borderColor: '#8884',
     paddingHorizontal: 8,
     paddingVertical: 3,
+  },
+  validateButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
   },
   image: {
     width: '100%',

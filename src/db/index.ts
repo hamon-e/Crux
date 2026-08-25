@@ -69,6 +69,12 @@ CREATE TABLE IF NOT EXISTS exercise_steps (
   video TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_exercise_steps_ex ON exercise_steps(exercise_id);
+CREATE TABLE IF NOT EXISTS exercise_step_progress (
+  exercise_id INTEGER NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  validated_at INTEGER NOT NULL,
+  PRIMARY KEY (exercise_id, step_order)
+);
 CREATE TABLE IF NOT EXISTS template_sets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   template_exercise_id INTEGER NOT NULL REFERENCES template_exercises(id) ON DELETE CASCADE,
@@ -462,4 +468,3 @@ DROP TABLE _mobility;
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
-
