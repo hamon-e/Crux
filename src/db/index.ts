@@ -7,7 +7,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 16;
+export const DATABASE_VERSION = 17;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -476,6 +476,30 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
         }
       }
     });
+  }
+
+  if (currentDbVersion < 17) {
+    // v17 : rattache les séances importées à la routine de même nom et
+    // récupère la couleur des anciennes séances créées avant le snapshot
+    // de couleur dans workouts.
+    await db.execAsync(`
+UPDATE workouts
+SET template_id = (
+  SELECT t.id FROM templates t
+  WHERE t.name = workouts.name
+  ORDER BY t.id LIMIT 1
+)
+WHERE template_id IS NULL
+  AND EXISTS (SELECT 1 FROM templates t WHERE t.name = workouts.name);
+
+UPDATE workouts
+SET color = COALESCE(
+  NULLIF((SELECT t.color FROM templates t WHERE t.id = workouts.template_id), ''),
+  ''
+)
+WHERE COALESCE(color, '') = ''
+  AND template_id IS NOT NULL;
+`);
   }
 
   // v14+ : synchronisation des étapes de progression (avec images) et des
