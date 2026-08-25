@@ -64,9 +64,10 @@ export default function ExerciseScreen() {
     setExercise({ ...exercise!, muscle });
   }
 
-  function openMedia() {
-    const url = exercise?.video_url;
-    if (url) void Linking.openURL(url);
+  function openMedia(url: string) {
+    void Linking.openURL(url).catch((error) => {
+      console.warn("Impossible d'ouvrir la vidéo de l'exercice", error);
+    });
   }
 
   async function handleUploadImage() {
@@ -102,21 +103,35 @@ export default function ExerciseScreen() {
   const bundledImage = getExerciseImageSource(exercise.name);
   const imageUri = exercise.image_uri || undefined;
   const hasImage = Boolean(coverImage || imageUri || bundledImage);
-  const handleImagePress = hasImage ? openMedia : handleUploadImage;
+  const videoUrl = exercise.video_url?.trim();
+  const hasVideo = Boolean(videoUrl);
+  const canOpenVideo = hasImage && hasVideo;
+  const canUploadImage = !hasImage;
+  const handleImagePress = canOpenVideo
+    ? () => openMedia(videoUrl!)
+    : canUploadImage
+      ? handleUploadImage
+      : undefined;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Pressable
-          onPress={() => void handleImagePress()}
-          disabled={hasImage && !exercise.video_url}
-          accessibilityRole="button"
-          accessibilityLabel={hasImage ? 'Voir la vidéo de l’exercice' : 'Ajouter une image'}
-          accessibilityHint={hasImage ? undefined : "Ouvre le sélecteur d'images"}>
+          onPress={handleImagePress}
+          disabled={!canOpenVideo && !canUploadImage}
+          accessibilityRole={canOpenVideo || canUploadImage ? 'button' : undefined}
+          accessibilityLabel={
+            canOpenVideo
+              ? 'Voir la vidéo de l’exercice'
+              : canUploadImage
+                ? 'Ajouter une image'
+                : undefined
+          }
+          accessibilityHint={canUploadImage ? "Ouvre le sélecteur d'images" : undefined}>
           {coverImage ? (
             <View>
               <Image source={coverImage} style={styles.hero} resizeMode="cover" />
-              {!!exercise.video_url && (
+              {hasVideo && (
                 <View style={styles.playBadge}>
                   <Text style={styles.playIcon}>▶</Text>
                   <Text style={styles.playLabel}>Voir la vidéo</Text>
@@ -124,14 +139,22 @@ export default function ExerciseScreen() {
               )}
             </View>
           ) : (
-            <ExerciseImage
-              name={exercise.name}
-              muscle={exercise.muscle}
-              imageUri={imageUri}
-              emptyLabel={!hasImage ? 'Ajouter une image' : undefined}
-              fullWidth
-              radius={14}
-            />
+            <View>
+              <ExerciseImage
+                name={exercise.name}
+                muscle={exercise.muscle}
+                imageUri={imageUri}
+                emptyLabel={!hasImage ? 'Ajouter une image' : undefined}
+                fullWidth
+                radius={14}
+              />
+              {hasImage && hasVideo && (
+                <View style={styles.playBadge}>
+                  <Text style={styles.playIcon}>▶</Text>
+                  <Text style={styles.playLabel}>Voir la vidéo</Text>
+                </View>
+              )}
+            </View>
           )}
         </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>{exercise.name}</Text>
