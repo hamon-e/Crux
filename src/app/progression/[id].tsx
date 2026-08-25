@@ -6,9 +6,9 @@ import { useSQLiteContext } from 'expo-sqlite';
 
 import {
   getExerciseSteps,
-  getSkillExercises,
+  getProgressions,
   toggleExerciseStepValidation,
-  validateExercisesManually,
+  validateProgressionsManually,
 } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
@@ -36,7 +36,7 @@ export default function ProgressionScreen() {
     useCallback(() => {
       void (async () => {
         try {
-          const tree = buildSkillTree(await getSkillExercises(db));
+          const tree = buildSkillTree(await getProgressions(db));
           setNodes(Object.values(tree).flat());
         } catch (e) {
           console.warn('Progression : impossible de lire les compétences', e);
@@ -47,15 +47,15 @@ export default function ProgressionScreen() {
     }, [db, refreshKey])
   );
 
-  async function handleManualValidate(exerciseId: number) {
+  async function handleManualValidate(progressionId: number) {
     if (validating) return;
     try {
       setValidating(true);
-      const selected = nodes.find((node) => node.id === exerciseId);
+      const selected = nodes.find((node) => node.id === progressionId);
       if (!selected) return;
 
       const selectedTierIdx = TIERS.indexOf(selected.tier);
-      const exercisesToValidate = nodes
+      const progressionsToValidate = nodes
         .filter(
           (node) =>
             node.category === selected.category &&
@@ -63,7 +63,7 @@ export default function ProgressionScreen() {
             !node.mastered
         )
         .map((node) => node.id);
-      await validateExercisesManually(db, exercisesToValidate);
+      await validateProgressionsManually(db, progressionsToValidate);
       setRefreshKey((k) => k + 1);
     } catch (e) {
       console.warn('Progression : validation manuelle impossible', e);
@@ -109,7 +109,7 @@ export default function ProgressionScreen() {
             accessibilityState={{ selected: hideMastered }}>
             <Text style={{ fontSize: 14 }}>{hideMastered ? '☑' : '☐'}</Text>
             <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
-              Masquer les exercices réussis
+              Masquer les progressions validées
             </Text>
           </Pressable>
         )}
@@ -126,22 +126,22 @@ export default function ProgressionScreen() {
 
         {prerequisites.length > 0 && (
           <>
-            <SectionLabel text="Ce qui mène à cet exercice" color={colors.textSecondary} />
+            <SectionLabel text="Ce qui mène à cette progression" color={colors.textSecondary} />
             {prerequisites.map((node) => (
-              <PathNode key={node.id} node={node} onPress={() => router.push(`/exercice/${node.id}`)} />
+              <PathNode key={node.id} node={node} onPress={() => router.push(`/progression/${node.id}`)} />
             ))}
             <View style={[styles.linkLine, { backgroundColor: colors.backgroundSelected }]} />
           </>
         )}
 
-        <SectionLabel text="Exercice sélectionné" color={TIER_COLORS[current.tier]} />
+        <SectionLabel text="Progression sélectionnée" color={TIER_COLORS[current.tier]} />
         <CurrentNode node={current} />
 
         {unlocks.length > 0 && (
           <>
-            <SectionLabel text="Ce que cet exercice débloque" color={colors.textSecondary} />
+            <SectionLabel text="Ce que cette progression débloque" color={colors.textSecondary} />
             {unlocks.map((node) => (
-              <PathNode key={node.id} node={node} onPress={() => router.push(`/exercice/${node.id}`)} />
+              <PathNode key={node.id} node={node} onPress={() => router.push(`/progression/${node.id}`)} />
             ))}
           </>
         )}
@@ -181,7 +181,7 @@ export default function ProgressionScreen() {
           </View>
         </View>
         <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-          {node.mastered ? '✅ Skill validé' : node.unlocked ? '🔓 À valider' : '🔒 Verrouillé'}
+          {node.mastered ? '✅ Progression validée' : node.unlocked ? '🔓 À valider' : '🔒 Verrouillée'}
         </Text>
       </Pressable>
     );
@@ -202,7 +202,7 @@ export default function ProgressionScreen() {
           <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16, flex: 1 }}>{node.name}</Text>
         </View>
         <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
-          {node.mastered ? 'Skill validé' : 'Skill non validé'}
+          {node.mastered ? 'Progression validée' : 'Progression non validée'}
         </Text>
         {!node.mastered && (
           <Pressable
@@ -210,7 +210,7 @@ export default function ProgressionScreen() {
             onPress={() => void handleManualValidate(node.id)}
             disabled={validating}>
             <Text style={{ color: TIER_COLORS[node.tier], fontWeight: '700' }}>
-              {validating ? 'Validation…' : '✓ Valider le skill'}
+              {validating ? 'Validation…' : '✓ Valider la progression'}
             </Text>
           </Pressable>
         )}

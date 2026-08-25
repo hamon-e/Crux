@@ -111,7 +111,7 @@ export default function EtapesScreen() {
         ))}
 
         {steps.length === 0 && (
-          <Text style={{ color: colors.textSecondary }}>Aucune étape enregistrée pour cet exercice.</Text>
+          <Text style={{ color: colors.textSecondary }}>Aucune étape enregistrée pour cette progression.</Text>
         )}
 
         <View style={{ height: 40 }} />
