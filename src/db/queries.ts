@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { createExerciseMatcher } from "@/lib/exercise-matching";
 import { ROUTINE_COLORS } from "@/constants/routine-colors";
+import { normalizeSkillName, SKILL_STEPS } from "./skill-steps";
 
 // ---------- Exercices ----------
 
@@ -61,6 +62,33 @@ export async function createExercise(
 
 export async function getExerciseById(db: SQLiteDatabase, id: number): Promise<Exercise | null> {
   return db.getFirstAsync<Exercise>("SELECT * FROM exercises WHERE id = ?", id);
+}
+
+export interface ExerciseProgression {
+  id: number;
+  name: string;
+}
+
+/** Renvoie la progression d'un skill ou la progression parente d'une étape. */
+export async function getExerciseProgression(
+  db: SQLiteDatabase,
+  exerciseId: number,
+): Promise<ExerciseProgression | null> {
+  const exercise = await getExerciseById(db, exerciseId);
+  if (!exercise) return null;
+
+  // Les exercices parents portent une catégorie de progression.
+  if (exercise.category) return { id: exercise.id, name: exercise.name };
+
+  const progressionKey = SKILL_STEPS.find((entry) =>
+    entry.steps.some((step) => normalizeSkillName(step.name) === normalizeSkillName(exercise.name)),
+  )?.key;
+  if (!progressionKey) return null;
+
+  const progression = (await getSkillExercises(db)).find(
+    (skill) => normalizeSkillName(skill.name) === progressionKey,
+  );
+  return progression ? { id: progression.id, name: progression.name } : null;
 }
 
 export async function updateExerciseMuscle(db: SQLiteDatabase, exerciseId: number, muscle: string) {
