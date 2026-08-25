@@ -1,12 +1,19 @@
 import { Tabs, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback } from 'react';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { Colors } from '@/constants/theme';
-import { getSetting } from '@/db/queries';
-import { REMINDER_DEFAULT_HOUR, REMINDER_DEFAULT_MINUTE, syncRoutineReminder } from '@/lib/reminders';
+import { getSetting, setSetting } from '@/db/queries';
+import {
+  REMINDER_DEFAULT_HOUR,
+  REMINDER_DEFAULT_MINUTE,
+  hasReminderPermission,
+  initNotifications,
+  requestReminderPermission,
+  syncRoutineReminder,
+} from '@/lib/reminders';
 
 export default function TabsLayout() {
   const scheme = useColorScheme();
@@ -18,8 +25,19 @@ export default function TabsLayout() {
   useFocusEffect(
     useCallback(() => {
       void (async () => {
-        const enabled = (await getSetting(db, 'reminder_enabled')) === '1';
+        if (Platform.OS === 'web') return;
+        const savedEnabled = await getSetting(db, 'reminder_enabled');
+        const enabled = savedEnabled === null || savedEnabled === '1';
         if (!enabled) return;
+
+        await initNotifications();
+        let permissionGranted = await hasReminderPermission();
+        if (!permissionGranted) permissionGranted = await requestReminderPermission();
+        if (!permissionGranted) {
+          await setSetting(db, 'reminder_enabled', '0');
+          return;
+        }
+
         const hour = parseInt((await getSetting(db, 'reminder_hour')) ?? '', 10);
         const minute = parseInt((await getSetting(db, 'reminder_minute')) ?? '', 10);
         await syncRoutineReminder(

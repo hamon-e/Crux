@@ -48,7 +48,8 @@ export default function MoreScreen() {
         setTemplates(await getTemplates(db));
         const saved = await getSetting(db, 'rest_seconds');
         if (saved) setRestSeconds(saved);
-        setReminderEnabled((await getSetting(db, 'reminder_enabled')) === '1');
+        const savedReminderEnabled = await getSetting(db, 'reminder_enabled');
+        setReminderEnabled(savedReminderEnabled === null || savedReminderEnabled === '1');
         const h = parseInt((await getSetting(db, 'reminder_hour')) ?? '', 10);
         const m = parseInt((await getSetting(db, 'reminder_minute')) ?? '', 10);
         if (!Number.isNaN(h)) setReminderHour(String(h));
