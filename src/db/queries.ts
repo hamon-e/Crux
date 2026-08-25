@@ -351,7 +351,11 @@ export async function getWorkoutDays(db: SQLiteDatabase, months = 6) {
   return db.getAllAsync<{ day: string; set_count: number; color: string }>(
     `SELECT w.date AS day,
             COALESCE(SUM(CASE WHEN s.done = 1 THEN 1 ELSE 0 END), 0) AS set_count,
-            COALESCE(NULLIF(w.color, ''), '') AS color
+            COALESCE(
+              NULLIF(w.color, ''),
+              NULLIF((SELECT t.color FROM templates t WHERE t.id = w.template_id), ''),
+              ''
+            ) AS color
      FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
      WHERE w.completed = 1 AND w.date >= date('now', ?)
      GROUP BY w.id ORDER BY w.started_at`,
@@ -1122,6 +1126,7 @@ export async function importStrongWorkouts(
     string,
     {
       startedAt: number;
+      workoutIds: number[];
       sets: { exerciseName: string; weight: number; reps: number; side?: 'left' | 'right' | null }[];
     }
   >();
@@ -1192,8 +1197,14 @@ export async function importStrongWorkouts(
       }
 
       const prev = w.name ? importedByName.get(w.name) : undefined;
-      if (!prev || w.startedAt > prev.startedAt) {
-        importedByName.set(w.name, { startedAt: w.startedAt, sets: w.sets });
+      if (!prev) {
+        importedByName.set(w.name, { startedAt: w.startedAt, workoutIds: [workoutId], sets: w.sets });
+      } else {
+        prev.workoutIds.push(workoutId);
+        if (w.startedAt > prev.startedAt) {
+          prev.startedAt = w.startedAt;
+          prev.sets = w.sets;
+        }
       }
       existing.add(w.startedAt);
       stats.imported++;
@@ -1223,24 +1234,30 @@ async function createRoutinesFromImports(
     string,
     {
       startedAt: number;
+      workoutIds: number[];
       sets: { exerciseName: string; weight: number; reps: number; side?: 'left' | 'right' | null }[];
     }
   >,
   resolvedByName: Map<string, number>,
   stats: ImportStats
 ) {
-  const existingTemplates = new Set(
-    (await txn.getAllAsync<{ name: string }>('SELECT name FROM templates')).map((r) => r.name)
+  const existingTemplates = new Map(
+    (
+      await txn.getAllAsync<{ id: number; name: string; color: string }>(
+        'SELECT id, name, color FROM templates'
+      )
+    ).map((r) => [r.name, r] as const)
   );
   const usedRoutineColors = new Set(
-    (await txn.getAllAsync<{ color: string }>("SELECT color FROM templates WHERE COALESCE(color, '') != ''"))
+    [...existingTemplates.values()]
       .map((r) => r.color)
+      .filter(Boolean)
   );
   let nextPaletteIndex = 0;
   let generatedColorIndex = 0;
 
   for (const [name, ref] of importedByName) {
-    if (!name.trim() || existingTemplates.has(name)) continue;
+    if (!name.trim()) continue;
 
     // Entrées dans l'ordre de première apparition ; pour un exercice
     // unilatéral le tri stable du parseur place le bloc droit avant le bloc
@@ -1263,32 +1280,53 @@ async function createRoutinesFromImports(
     }
     if (entries.size === 0) continue;
 
-    const color = getNextRoutineColor(
-      usedRoutineColors,
-      () => ROUTINE_COLORS[nextPaletteIndex++ % ROUTINE_COLORS.length],
-      () => getGeneratedRoutineColor(generatedColorIndex++)
-    );
-    const templateId = (
-      await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', color)
-    ).lastInsertRowId;
-
-    let orderIndex = 0;
-    for (const e of entries.values()) {
-      await txn.runAsync(
-        `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index, side)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        templateId,
-        e.exerciseId,
-        e.weights.length,
-        mostCommon(e.reps),
-        roundHalf(e.weights.reduce((a, b) => Math.max(a, b), 0)),
-        orderIndex,
-        e.side
+    const existing = existingTemplates.get(name);
+    let templateId: number;
+    let color: string;
+    let created = false;
+    if (existing) {
+      templateId = existing.id;
+      color = existing.color || ROUTINE_COLORS[0];
+    } else {
+      color = getNextRoutineColor(
+        usedRoutineColors,
+        () => ROUTINE_COLORS[nextPaletteIndex++ % ROUTINE_COLORS.length],
+        () => getGeneratedRoutineColor(generatedColorIndex++)
       );
-      orderIndex++;
+      templateId = (
+        await txn.runAsync('INSERT INTO templates (name, notes, color) VALUES (?, ?, ?)', name, '', color)
+      ).lastInsertRowId;
+      created = true;
+
+      let orderIndex = 0;
+      for (const e of entries.values()) {
+        await txn.runAsync(
+          `INSERT INTO template_exercises (template_id, exercise_id, target_sets, target_reps, target_weight, order_index, side)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          templateId,
+          e.exerciseId,
+          e.weights.length,
+          mostCommon(e.reps),
+          roundHalf(e.weights.reduce((a, b) => Math.max(a, b), 0)),
+          orderIndex,
+          e.side
+        );
+        orderIndex++;
+      }
+      existingTemplates.set(name, { id: templateId, name, color });
     }
-    existingTemplates.add(name);
-    stats.routinesCreated++;
+
+    // Les séances importées sont créées avant leur routine de référence.
+    // Rattachons-les maintenant afin de conserver leur couleur dans
+    // l'historique et lors d'une duplication.
+    const placeholders = ref.workoutIds.map(() => '?').join(', ');
+    await txn.runAsync(
+      `UPDATE workouts SET template_id = ?, color = ? WHERE id IN (${placeholders})`,
+      templateId,
+      color,
+      ...ref.workoutIds
+    );
+    if (created) stats.routinesCreated++;
   }
 }
 
