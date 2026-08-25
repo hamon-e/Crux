@@ -517,7 +517,9 @@ export async function getWorkoutDays(db: SQLiteDatabase, months = 6) {
               ''
             ) AS color
      FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
-     WHERE w.completed = 1 AND w.date >= date('now', ?)
+     WHERE w.completed = 1
+       AND w.name <> 'Validation manuelle'
+       AND w.date >= date('now', ?)
      GROUP BY w.id ORDER BY w.started_at`,
     `-${months} month`,
   );
@@ -549,6 +551,7 @@ export async function getWorkouts(
             COALESCE(SUM(CASE WHEN s.done = 1 THEN s.weight * s.reps ELSE 0 END), 0) AS total_volume,
             COUNT(s.id) AS set_count
      FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
+     WHERE w.name <> 'Validation manuelle'
      GROUP BY w.id ORDER BY w.started_at DESC LIMIT ? OFFSET ?`,
     limit,
     offset,
@@ -1178,7 +1181,10 @@ export async function getCurrentWeekDailyVolume(db: SQLiteDatabase) {
             SUM(CASE WHEN s.done = 1 THEN 1 ELSE 0 END) AS set_count,
             COUNT(DISTINCT w.id) AS workout_count
      FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
-     WHERE w.completed = 1 AND w.date >= date('now', 'weekday 1', '-6 days') AND w.date <= date('now')
+     WHERE w.completed = 1
+       AND w.name <> 'Validation manuelle'
+       AND w.date >= date('now', 'weekday 1', '-6 days')
+       AND w.date <= date('now')
      GROUP BY w.date ORDER BY w.date`,
   );
 }
