@@ -1071,7 +1071,7 @@ export async function importStrongWorkouts(
   }[],
   /** Association manuelle nom CSV -> id d'exercice existant. */
   exerciseOverrides: Record<string, number> = {},
-  /** Groupe musculaire des nouveaux exercices créés (nom CSV -> muscle). */
+  /** Groupe musculaire choisi pendant le matching (nom CSV -> muscle). */
   newExerciseMuscles: Record<string, string> = {}
 ): Promise<ImportStats> {
   const stats: ImportStats = {
@@ -1097,6 +1097,7 @@ export async function importStrongWorkouts(
 
   // Résolution nom CSV -> id d'exercice, mémorisée pour construire les routines
   const resolvedByName = new Map<string, number>();
+  const updatedOverrideMuscles = new Set<string>();
   // Séances importées par nom de routine (on garde la plus récente comme référence)
   const importedByName = new Map<
     string,
@@ -1131,6 +1132,16 @@ export async function importStrongWorkouts(
         let ex: { id: number; name: string } | null;
         const overrideId = exerciseOverrides[s.exerciseName];
         if (overrideId) {
+          const selectedMuscle = newExerciseMuscles[s.exerciseName];
+          const muscleUpdateKey = `${overrideId}:${selectedMuscle ?? ''}`;
+          if (selectedMuscle && !updatedOverrideMuscles.has(muscleUpdateKey)) {
+            await txn.runAsync(
+              'UPDATE exercises SET muscle = ? WHERE id = ?',
+              selectedMuscle,
+              overrideId
+            );
+            updatedOverrideMuscles.add(muscleUpdateKey);
+          }
           ex = { id: overrideId, name: s.exerciseName };
         } else {
           ex = matcher.find(s.exerciseName);

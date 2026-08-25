@@ -66,7 +66,7 @@ export default function ImportScreen() {
   const [unmatched, setUnmatched] = useState<string[]>([]);
   /** nom CSV -> id d'exercice existant (absent = créer un nouvel exercice). */
   const [overrides, setOverrides] = useState<Record<string, number>>({});
-  /** nom CSV -> groupe musculaire pour les nouveaux exercices créés à l'import. */
+  /** nom CSV -> groupe musculaire choisi pour l'exercice importé/matché. */
   const [newMuscles, setNewMuscles] = useState<Record<string, Muscle>>({});
   const [musclePickName, setMusclePickName] = useState<string | null>(null);
   const [exerciseList, setExerciseList] = useState<Exercise[]>([]);
@@ -104,6 +104,7 @@ export default function ImportScreen() {
     setParsed(null);
     setUnmatched([]);
     setOverrides({});
+    setNewMuscles({});
     setFileName(null);
 
     setBusy(true);
@@ -168,6 +169,13 @@ export default function ImportScreen() {
       return next;
     });
     setMappingName(null);
+    if (id !== null) {
+      const targetMuscle = exerciseById.get(id)?.muscle;
+      const matchedMuscle = MUSCLES.includes(targetMuscle as Muscle)
+        ? (targetMuscle as Muscle)
+        : "fullbody";
+      setNewMuscles((prev) => ({ ...prev, [name]: matchedMuscle }));
+    }
     // Nouvel exercice : on demande directement son groupe musculaire cible
     if (id === null) setMusclePickName(name);
   }
@@ -214,6 +222,7 @@ export default function ImportScreen() {
                 </Text>
                 {unmatched.map((name) => {
                   const target = overrides[name] ? exerciseById.get(overrides[name]) : null;
+                  const selectedMuscle = newMuscles[name] ?? target?.muscle ?? "fullbody";
                   return (
                     <View key={name} style={styles.matchRow}>
                       <Pressable style={{ flex: 1 }} onPress={() => openMapping(name)}>
@@ -230,19 +239,17 @@ export default function ImportScreen() {
                           {target ? `→ ${target.name} ›` : "Nouvel exercice ›"}
                         </Text>
                       </Pressable>
-                      {!target && (
-                        <Pressable
-                          style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
-                          onPress={() => {
-                            setSearch("");
-                            setMusclePickName(name);
-                          }}
-                        >
-                          <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
-                            {MUSCLE_LABELS[newMuscles[name] ?? "fullbody"]}
-                          </Text>
-                        </Pressable>
-                      )}
+                      <Pressable
+                        style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
+                        onPress={() => {
+                          setSearch("");
+                          setMusclePickName(name);
+                        }}
+                      >
+                        <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
+                          {MUSCLE_LABELS[selectedMuscle] ?? selectedMuscle}
+                        </Text>
+                      </Pressable>
                     </View>
                   );
                 })}
