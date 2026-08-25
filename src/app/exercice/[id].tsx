@@ -149,24 +149,49 @@ export default function ExerciseScreen() {
           {history.length === 0 && (
             <Text style={{ color: colors.textSecondary }}>Aucune série validée.</Text>
           )}
-          {[...history].reverse().map((h) => (
-            <View key={h.started_at}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.text }}>{h.date}</Text>
-                <Text style={{ color: colors.textSecondary }}>
-                  max {h.top_weight} kg · {h.total_reps} reps
-                </Text>
+          {[...history].reverse().map((h) => {
+            const sideDetails = h.side_details;
+            const hasBothSides = Boolean(sideDetails?.left && sideDetails?.right);
+            const showSideWeights = h.top_weight > 0;
+
+            return (
+              <View key={h.started_at}>
+                {hasBothSides ? (
+                  <>
+                    <Text style={{ color: colors.text }}>{h.date}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
+                      {SIDE_LABELS.right} :{' '}
+                      {showSideWeights
+                        ? `${sideDetails?.right?.top_weight ?? 0} kg`
+                        : `${sideDetails?.right?.total_reps ?? 0} reps`}
+                      {' · '}
+                      {SIDE_LABELS.left} :{' '}
+                      {showSideWeights
+                        ? `${sideDetails?.left?.top_weight ?? 0} kg`
+                        : `${sideDetails?.left?.total_reps ?? 0} reps`}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: colors.text }}>{h.date}</Text>
+                      <Text style={{ color: colors.textSecondary }}>
+                        max {h.top_weight} kg · {h.total_reps} reps
+                      </Text>
+                    </View>
+                    {sideDetails && (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
+                        {SIDE_LABELS.right} : {sideDetails.right?.total_reps ?? 0} reps
+                        {' · '}
+                        {SIDE_LABELS.left} : {sideDetails.left?.total_reps ?? 0} reps
+                        {!sideDetails.left || !sideDetails.right ? ' (côté manquant)' : ''}
+                      </Text>
+                    )}
+                  </>
+                )}
               </View>
-              {h.side_details && (
-                <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
-                  {SIDE_LABELS.right} : {h.side_details.right?.total_reps ?? 0} reps
-                  {' · '}
-                  {SIDE_LABELS.left} : {h.side_details.left?.total_reps ?? 0} reps
-                  {(!h.side_details.left || !h.side_details.right) ? ' (côté manquant)' : ''}
-                </Text>
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
