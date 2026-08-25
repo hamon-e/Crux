@@ -10,9 +10,13 @@ export async function getExercises(
   db: SQLiteDatabase,
   search?: string,
   muscle?: string,
-  tag?: string
+  tag?: string,
+  includeSkillExercises = false
 ): Promise<Exercise[]> {
-  const conditions: string[] = ["COALESCE(category, '') = ''"];
+  const conditions: string[] = [];
+  if (!includeSkillExercises) {
+    conditions.push("COALESCE(category, '') = ''");
+  }
   const params: (string | number)[] = [];
   if (search) {
     conditions.push('name LIKE ?');
