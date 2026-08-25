@@ -86,25 +86,34 @@ export async function getSkillExercises(db: SQLiteDatabase): Promise<SkillExerci
 
 /** Valide manuellement un skill en ajoutant une occurrence à son historique. */
 export async function validateExerciseManually(db: SQLiteDatabase, exerciseId: number): Promise<number> {
+  const [workoutId] = await validateExercisesManually(db, [exerciseId]);
+  return workoutId;
+}
+
+/** Valide plusieurs skills manuellement dans une seule transaction. */
+export async function validateExercisesManually(db: SQLiteDatabase, exerciseIds: number[]): Promise<number[]> {
   const day = today();
   const endedAt = Date.now();
-  let workoutId = 0;
+  const workoutIds: number[] = [];
   await db.withTransactionAsync(async () => {
-    const result = await db.runAsync(
-      'INSERT INTO workouts (name, date, started_at, ended_at, completed) VALUES (?, ?, ?, ?, 1)',
-      'Validation manuelle',
-      day,
-      endedAt,
-      endedAt
-    );
-    workoutId = result.lastInsertRowId;
-    await db.runAsync(
-      'INSERT INTO sets (workout_id, exercise_id, weight, reps, done, set_order) VALUES (?, ?, 0, 0, 1, 0)',
-      workoutId,
-      exerciseId
-    );
+    for (const exerciseId of [...new Set(exerciseIds)]) {
+      const result = await db.runAsync(
+        'INSERT INTO workouts (name, date, started_at, ended_at, completed) VALUES (?, ?, ?, ?, 1)',
+        'Validation manuelle',
+        day,
+        endedAt,
+        endedAt
+      );
+      const workoutId = result.lastInsertRowId;
+      workoutIds.push(workoutId);
+      await db.runAsync(
+        'INSERT INTO sets (workout_id, exercise_id, weight, reps, done, set_order) VALUES (?, ?, 0, 0, 1, 0)',
+        workoutId,
+        exerciseId
+      );
+    }
   });
-  return workoutId;
+  return workoutIds;
 }
 
 export interface ExerciseStep {

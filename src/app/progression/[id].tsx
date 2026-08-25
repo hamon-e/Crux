@@ -4,7 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { getExerciseSteps, getSkillExercises, validateExerciseManually, validateExerciseStep } from '@/db/queries';
+import {
+  getExerciseSteps,
+  getSkillExercises,
+  validateExercisesManually,
+  validateExerciseStep,
+} from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -46,7 +51,19 @@ export default function ProgressionScreen() {
     if (validating) return;
     try {
       setValidating(true);
-      await validateExerciseManually(db, exerciseId);
+      const selected = nodes.find((node) => node.id === exerciseId);
+      if (!selected) return;
+
+      const selectedTierIdx = TIERS.indexOf(selected.tier);
+      const exercisesToValidate = nodes
+        .filter(
+          (node) =>
+            node.category === selected.category &&
+            TIERS.indexOf(node.tier) <= selectedTierIdx &&
+            !node.mastered
+        )
+        .map((node) => node.id);
+      await validateExercisesManually(db, exercisesToValidate);
       setRefreshKey((k) => k + 1);
     } catch (e) {
       console.warn('Progression : validation manuelle impossible', e);
@@ -136,7 +153,11 @@ export default function ProgressionScreen() {
     const cover = getStepImageSource(node.cover_image ?? null);
     return (
       <Pressable
-        style={[styles.pathCard, { backgroundColor: colors.backgroundElement }, !node.unlocked && styles.locked]}
+        style={[
+          styles.pathCard,
+          { backgroundColor: node.mastered ? '#34c75922' : colors.backgroundElement },
+          !node.unlocked && styles.locked,
+        ]}
         onPress={onPress}>
         {cover ? (
           <Image source={cover} style={styles.nodeImage} resizeMode="cover" />
@@ -168,7 +189,14 @@ export default function ProgressionScreen() {
 
   function CurrentNode({ node }: { node: SkillNode }) {
     return (
-      <View style={[styles.currentCard, { borderColor: TIER_COLORS[node.tier] }]}>
+      <View
+        style={[
+          styles.currentCard,
+          {
+            backgroundColor: node.mastered ? '#34c75922' : colors.backgroundElement,
+            borderColor: TIER_COLORS[node.tier],
+          },
+        ]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Text style={{ fontSize: 20 }}>{node.mastered ? '✅' : node.unlocked ? '🔓' : '🔒'}</Text>
           <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16, flex: 1 }}>{node.name}</Text>
@@ -203,6 +231,8 @@ export default function ProgressionScreen() {
       }, [exerciseId])
     );
     if (steps.length === 0) return null;
+    const validatedSteps = steps.filter((step) => step.validated === 1).length;
+    const validationPercent = Math.round((validatedSteps / steps.length) * 100);
     return (
       <View style={{ marginTop: 12, gap: 8 }}>
         <Pressable onPress={() => setStepsOpen((o) => !o)} hitSlop={6}>
@@ -210,6 +240,24 @@ export default function ProgressionScreen() {
             {stepsOpen ? '▾' : '▸'} Étapes de progression ({steps.length})
           </Text>
         </Pressable>
+        <View style={styles.stepsProgress}>
+          <View style={styles.stepsProgressHeader}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700' }}>
+              Validation des étapes
+            </Text>
+            <Text style={{ color: validationPercent === 100 ? '#34c759' : tierColor, fontSize: 12, fontWeight: '800' }}>
+              {validationPercent}% ({validatedSteps}/{steps.length})
+            </Text>
+          </View>
+          <View style={[styles.stepProgressTrack, { backgroundColor: colors.backgroundSelected }]}>
+            <View
+              style={[
+                styles.stepProgressFill,
+                { width: `${validationPercent}%`, backgroundColor: validationPercent === 100 ? '#34c759' : tierColor },
+              ]}
+            />
+          </View>
+        </View>
         {stepsOpen &&
           steps.map((step, i) => (
             <Pressable
@@ -336,6 +384,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
   },
+  stepsProgress: { gap: 5 },
+  stepsProgressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  stepProgressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  stepProgressFill: { height: '100%', borderRadius: 3 },
   stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepDetails: { gap: 6, marginTop: 6 },
   stepBadge: {
