@@ -112,14 +112,81 @@ export interface Progression {
   muscle: string;
   category: string;
   difficulty: string;
-  /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée. */
+  /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée.
+   * Les prérequis déduits de l'historique ont au minimum la valeur 1. */
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
 }
 
+const PROGRESSION_TIER_ORDER: Record<string, number> = {
+  fundamental: 0,
+  beginner: 1,
+  intermediate: 2,
+  advanced: 3,
+  ultimate: 4,
+};
+
+function progressionTierOrder(difficulty: string): number {
+  // Même comportement que l'arbre : une difficulté inconnue est placée au
+  // dernier palier et ne valide donc pas de progression située au-dessus.
+  return PROGRESSION_TIER_ORDER[difficulty] ?? PROGRESSION_TIER_ORDER.ultimate;
+}
+
+/**
+ * Déduit les progressions acquises depuis les exercices réalisés. Une étape de
+ * progression valide sa progression parente ; une progression acquise valide également les
+ * prérequis des paliers précédents de sa catégorie.
+ */
+function getProgressionsCompletedFromHistory(
+  progressions: Pick<Progression, "id" | "name" | "category" | "difficulty">[],
+  historicalExerciseNames: Iterable<string>,
+): Set<number> {
+  const progressionByKey = new Map(
+    progressions.map((progression) => [normalizeSkillName(progression.name), progression]),
+  );
+  const parentsByStepKey = new Map<string, Set<string>>();
+  for (const entry of SKILL_STEPS) {
+    for (const step of entry.steps) {
+      const stepKey = normalizeSkillName(step.name);
+      const parents = parentsByStepKey.get(stepKey) ?? new Set<string>();
+      parents.add(entry.key);
+      parentsByStepKey.set(stepKey, parents);
+    }
+  }
+
+  const completed = new Set<number>();
+  for (const name of historicalExerciseNames) {
+    const key = normalizeSkillName(name);
+    const directProgression = progressionByKey.get(key);
+    if (directProgression) completed.add(directProgression.id);
+    for (const parentKey of parentsByStepKey.get(key) ?? []) {
+      const parent = progressionByKey.get(parentKey);
+      if (parent) completed.add(parent.id);
+    }
+  }
+
+  // On prend une photo des progressions directement atteintes : les prérequis ainsi
+  // ajoutés ne doivent pas, à leur tour, valider d'autres catégories.
+  for (const completedId of [...completed]) {
+    const target = progressions.find((progression) => progression.id === completedId);
+    if (!target) continue;
+    const targetTier = progressionTierOrder(target.difficulty);
+    for (const progression of progressions) {
+      if (
+        progression.category === target.category &&
+        progressionTierOrder(progression.difficulty) <= targetTier
+      ) {
+        completed.add(progression.id);
+      }
+    }
+  }
+
+  return completed;
+}
+
 export async function getProgressions(db: SQLiteDatabase): Promise<Progression[]> {
-  return db.getAllAsync<Progression>(
+  const progressions = await db.getAllAsync<Progression>(
     `SELECT e.id, e.name, e.muscle,
             COALESCE(e.category, '') AS category,
             COALESCE(e.difficulty, '') AS difficulty,
@@ -130,6 +197,23 @@ export async function getProgressions(db: SQLiteDatabase): Promise<Progression[]
      FROM exercises e
      WHERE COALESCE(e.category, '') != ''
      ORDER BY e.name`,
+  );
+  const historicalExercises = await db.getAllAsync<{ name: string }>(
+    `SELECT DISTINCT e.name
+     FROM exercises e
+     JOIN sets s ON s.exercise_id = e.id
+     JOIN workouts w ON w.id = s.workout_id
+     WHERE w.completed = 1 AND s.done = 1`,
+  );
+  const completedProgressionIds = getProgressionsCompletedFromHistory(
+    progressions,
+    historicalExercises.map((exercise) => exercise.name),
+  );
+
+  return progressions.map((progression) =>
+    completedProgressionIds.has(progression.id) && progression.sessions === 0
+      ? { ...progression, sessions: 1 }
+      : progression,
   );
 }
 
