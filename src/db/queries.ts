@@ -113,33 +113,19 @@ export interface Progression {
   category: string;
   difficulty: string;
   /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée.
-   * Les prérequis déduits de l'historique ont au minimum la valeur 1. */
+   * Les progressions déduites de leurs étapes ont au minimum la valeur 1. */
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
 }
 
-const PROGRESSION_TIER_ORDER: Record<string, number> = {
-  fundamental: 0,
-  beginner: 1,
-  intermediate: 2,
-  advanced: 3,
-  ultimate: 4,
-};
-
-function progressionTierOrder(difficulty: string): number {
-  // Même comportement que l'arbre : une difficulté inconnue est placée au
-  // dernier palier et ne valide donc pas de progression située au-dessus.
-  return PROGRESSION_TIER_ORDER[difficulty] ?? PROGRESSION_TIER_ORDER.ultimate;
-}
-
 /**
  * Déduit les progressions acquises depuis les exercices réalisés. Une étape de
- * progression valide sa progression parente ; une progression acquise valide également les
- * prérequis des paliers précédents de sa catégorie.
+ * progression valide uniquement sa progression parente. Un exercice portant
+ * exactement le nom d'une progression valide cette progression.
  */
 function getProgressionsCompletedFromHistory(
-  progressions: Pick<Progression, "id" | "name" | "category" | "difficulty">[],
+  progressions: Pick<Progression, "id" | "name">[],
   historicalExerciseNames: Iterable<string>,
 ): Set<number> {
   const progressionByKey = new Map(
@@ -163,22 +149,6 @@ function getProgressionsCompletedFromHistory(
     for (const parentKey of parentsByStepKey.get(key) ?? []) {
       const parent = progressionByKey.get(parentKey);
       if (parent) completed.add(parent.id);
-    }
-  }
-
-  // On prend une photo des progressions directement atteintes : les prérequis ainsi
-  // ajoutés ne doivent pas, à leur tour, valider d'autres catégories.
-  for (const completedId of [...completed]) {
-    const target = progressions.find((progression) => progression.id === completedId);
-    if (!target) continue;
-    const targetTier = progressionTierOrder(target.difficulty);
-    for (const progression of progressions) {
-      if (
-        progression.category === target.category &&
-        progressionTierOrder(progression.difficulty) <= targetTier
-      ) {
-        completed.add(progression.id);
-      }
     }
   }
 

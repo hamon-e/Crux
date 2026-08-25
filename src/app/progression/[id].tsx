@@ -51,19 +51,7 @@ export default function ProgressionScreen() {
     if (validating) return;
     try {
       setValidating(true);
-      const selected = nodes.find((node) => node.id === progressionId);
-      if (!selected) return;
-
-      const selectedTierIdx = TIERS.indexOf(selected.tier);
-      const progressionsToValidate = nodes
-        .filter(
-          (node) =>
-            node.category === selected.category &&
-            TIERS.indexOf(node.tier) <= selectedTierIdx &&
-            !node.mastered
-        )
-        .map((node) => node.id);
-      await validateProgressionsManually(db, progressionsToValidate);
+      await validateProgressionsManually(db, [progressionId]);
       setRefreshKey((k) => k + 1);
     } catch (e) {
       console.warn('Progression : validation manuelle impossible', e);
