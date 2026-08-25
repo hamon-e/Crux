@@ -56,6 +56,10 @@ export async function updateExerciseMuscle(db: SQLiteDatabase, exerciseId: numbe
   await db.runAsync('UPDATE exercises SET muscle = ? WHERE id = ?', muscle, exerciseId);
 }
 
+export async function updateExerciseImage(db: SQLiteDatabase, exerciseId: number, imageUri: string) {
+  await db.runAsync('UPDATE exercises SET image_uri = ? WHERE id = ?', imageUri, exerciseId);
+}
+
 // ---------- Arbre de compétences ----------
 
 export interface SkillExercise {
