@@ -168,20 +168,28 @@ export async function getExerciseSteps(
   );
 }
 
-/** Valide une étape indépendamment du skill complet. */
-export async function validateExerciseStep(
+/** Bascule la validation d’une étape indépendamment du skill complet. */
+export async function toggleExerciseStepValidation(
   db: SQLiteDatabase,
   exerciseId: number,
   stepOrder: number,
 ) {
-  await db.runAsync(
-    `INSERT INTO exercise_step_progress (exercise_id, step_order, validated_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(exercise_id, step_order) DO UPDATE SET validated_at = excluded.validated_at`,
-    exerciseId,
-    stepOrder,
-    Date.now(),
-  );
+  await db.withTransactionAsync(async () => {
+    const result = await db.runAsync(
+      'DELETE FROM exercise_step_progress WHERE exercise_id = ? AND step_order = ?',
+      exerciseId,
+      stepOrder,
+    );
+
+    if (result.changes === 0) {
+      await db.runAsync(
+        'INSERT INTO exercise_step_progress (exercise_id, step_order, validated_at) VALUES (?, ?, ?)',
+        exerciseId,
+        stepOrder,
+        Date.now(),
+      );
+    }
+  });
 }
 
 // ---------- Types de séance ----------

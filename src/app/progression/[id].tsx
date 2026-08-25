@@ -7,8 +7,8 @@ import { useSQLiteContext } from 'expo-sqlite';
 import {
   getExerciseSteps,
   getSkillExercises,
+  toggleExerciseStepValidation,
   validateExercisesManually,
-  validateExerciseStep,
 } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
@@ -292,10 +292,10 @@ export default function ProgressionScreen() {
                 )}
                 <Pressable
                   style={[styles.stepValidateButton, { borderColor: step.validated ? '#34c759' : tierColor }]}
-                  disabled={step.validated === 1 || validatingStep === step.step_order}
+                  disabled={validatingStep === step.step_order}
                   onPress={() => {
                     setValidatingStep(step.step_order);
-                    void validateExerciseStep(db, exerciseId, step.step_order)
+                    void toggleExerciseStepValidation(db, exerciseId, step.step_order)
                       .then(() => getExerciseSteps(db, exerciseId).then(setSteps))
                       .catch((e) => console.warn('Progression : validation de l’étape impossible', e))
                       .finally(() => setValidatingStep(null));
