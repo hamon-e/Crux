@@ -72,7 +72,7 @@ export default function ImportScreen() {
   const [musclePickName, setMusclePickName] = useState<string | null>(null);
   const [exerciseList, setExerciseList] = useState<Exercise[]>([]);
   const [mappingName, setMappingName] = useState<string | null>(null);
-  const [reviewVisible, setReviewVisible] = useState(false);
+  const [showAllMatches, setShowAllMatches] = useState(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<ImportStats | null>(null);
@@ -94,6 +94,12 @@ export default function ImportScreen() {
       .sort((a, b) => a.localeCompare(b))
       .map((name) => ({ name, automaticTarget: matcher.find(name) }));
   }, [exerciseList, parsed]);
+
+  const visibleImportMatches = useMemo(() => {
+    if (showAllMatches) return importExerciseMatches;
+    const unmatchedNames = new Set(unmatched);
+    return importExerciseMatches.filter((match) => unmatchedNames.has(match.name));
+  }, [importExerciseMatches, showAllMatches, unmatched]);
 
   function targetFor(name: string, automaticTarget: Exercise | null) {
     if (Object.prototype.hasOwnProperty.call(overrides, name)) {
@@ -125,7 +131,7 @@ export default function ImportScreen() {
     setOverrides({});
     setNewMuscles({});
     setFileName(null);
-    setReviewVisible(false);
+    setShowAllMatches(false);
 
     setBusy(true);
     try {
@@ -147,6 +153,7 @@ export default function ImportScreen() {
       setFileName(picked.name);
       setParsed(parsedWorkouts);
       setUnmatched(unmatchedNames);
+      setShowAllMatches(unmatchedNames.length === 0);
       setExerciseList(exercises);
     } catch (e) {
       setError(`Impossible de lire ce fichier.${e instanceof Error ? ` (${e.message})` : ""}`);
@@ -166,7 +173,7 @@ export default function ImportScreen() {
       setOverrides({});
       setNewMuscles({});
       setFileName(null);
-      setReviewVisible(false);
+      setShowAllMatches(false);
       setError(null);
     } catch (e) {
       setError(`Erreur pendant l'import.${e instanceof Error ? ` (${e.message})` : ""}`);
@@ -175,9 +182,8 @@ export default function ImportScreen() {
     }
   }
 
-  function openMapping(name: string, closeReview = false) {
+  function openMapping(name: string) {
     setSearch("");
-    if (closeReview) setReviewVisible(false);
     setMappingName(name);
   }
 
@@ -232,19 +238,34 @@ export default function ImportScreen() {
                 gauche.
               </Text>
             )}
-            {unmatched.length > 0 && (
-              <View>
-                <Text style={{ color: colors.text, fontWeight: "700" }}>
-                  Nouveaux exercices ({unmatched.length})
-                </Text>
-                <Text style={{ color: colors.textSecondary }}>
-                  Associe-les à un exercice existant ou choisis leur groupe musculaire, sinon ils
-                  seront créés en Full body.
-                </Text>
-                {unmatched.map((name) => {
-                  const automaticTarget =
-                    importExerciseMatches.find((match) => match.name === name)?.automaticTarget ??
-                    null;
+            {importExerciseMatches.length > 0 && (
+              <View style={styles.reviewSection}>
+                <View style={styles.reviewHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {showAllMatches ? "Toutes les correspondances" : "Nouveaux exercices"} (
+                      {visibleImportMatches.length})
+                    </Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      {showAllMatches
+                        ? "Touche une ligne pour modifier son association."
+                        : "Associe les nouveaux exercices ou choisis leur groupe musculaire."}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={[styles.reviewButton, { borderColor: colors.backgroundSelected }]}
+                    onPress={() => setShowAllMatches((current) => !current)}
+                  >
+                    <Text style={{ color: "#007AFF", fontWeight: "700" }}>
+                      {showAllMatches
+                        ? `Voir nouveaux (${unmatched.length})`
+                        : `Voir tout (${importExerciseMatches.length})`}
+                    </Text>
+                  </Pressable>
+                </View>
+                {visibleImportMatches.map(({ name, automaticTarget }) => {
+                  const isUnmatched = unmatched.includes(name);
+                  const manuallySet = Object.prototype.hasOwnProperty.call(overrides, name);
                   const target = targetFor(name, automaticTarget);
                   const selectedMuscle = newMuscles[name] ?? target?.muscle ?? "fullbody";
                   return (
@@ -255,51 +276,34 @@ export default function ImportScreen() {
                         </Text>
                         <Text
                           style={{
-                            color: target ? "#30D158" : colors.textSecondary,
+                            color: target ? "#30D158" : "#FF9F0A",
                             fontWeight: "600",
                           }}
                           numberOfLines={1}
                         >
-                          {target ? `→ ${target.name} ›` : "Nouvel exercice ›"}
+                          {target
+                            ? `→ ${target.name}${manuallySet ? " · modifié" : ""} ›`
+                            : "Nouvel exercice ›"}
                         </Text>
                       </Pressable>
-                      <Pressable
-                        style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
-                        onPress={() => {
-                          setSearch("");
-                          setMusclePickName(name);
-                        }}
-                      >
-                        <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
-                          {MUSCLE_LABELS[selectedMuscle] ?? selectedMuscle}
-                        </Text>
-                      </Pressable>
+                      {isUnmatched && (
+                        <Pressable
+                          style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
+                          onPress={() => {
+                            setSearch("");
+                            setMusclePickName(name);
+                          }}
+                        >
+                          <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
+                            {MUSCLE_LABELS[selectedMuscle] ?? selectedMuscle}
+                          </Text>
+                        </Pressable>
+                      )}
                     </View>
                   );
                 })}
               </View>
             )}
-            <View style={styles.reviewSection}>
-              <View style={styles.reviewHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    Correspondances des exercices
-                  </Text>
-                  <Text style={{ color: colors.textSecondary }}>
-                    Vérifie les associations automatiques avant l&apos;import et corrige-les si
-                    besoin.
-                  </Text>
-                </View>
-                <Pressable
-                  style={[styles.reviewButton, { borderColor: colors.backgroundSelected }]}
-                  onPress={() => setReviewVisible(true)}
-                >
-                  <Text style={{ color: "#007AFF", fontWeight: "700" }}>
-                    Voir tout ({importExerciseMatches.length})
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
             <Pressable
               style={[styles.button, { backgroundColor: "#30D158" }, busy && styles.disabled]}
               disabled={busy}
@@ -379,67 +383,6 @@ export default function ImportScreen() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal
-        visible={reviewVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setReviewVisible(false)}
-      >
-        <Pressable
-          style={[styles.modalBackdrop, { backgroundColor: "#0009" }]}
-          onPress={() => setReviewVisible(false)}
-        >
-          <Pressable style={[styles.modalCard, { backgroundColor: colors.background }]}>
-            <View style={styles.reviewModalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 3 }]}>
-                  Vérifier les correspondances
-                </Text>
-                <Text style={{ color: colors.textSecondary }}>
-                  Touche une ligne pour modifier son association.
-                </Text>
-              </View>
-              <Pressable onPress={() => setReviewVisible(false)} hitSlop={10}>
-                <Text style={{ color: "#007AFF", fontSize: 16, fontWeight: "700" }}>Fermer</Text>
-              </Pressable>
-            </View>
-            <FlatList
-              data={importExerciseMatches}
-              keyExtractor={(match) => match.name}
-              renderItem={({ item }) => {
-                const manuallySet = Object.prototype.hasOwnProperty.call(overrides, item.name);
-                const target = targetFor(item.name, item.automaticTarget);
-                return (
-                  <Pressable style={styles.matchRow} onPress={() => openMapping(item.name, true)}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text }} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text
-                        style={{
-                          color: target ? "#30D158" : "#FF9F0A",
-                          fontWeight: "600",
-                        }}
-                        numberOfLines={1}
-                      >
-                        {target
-                          ? `→ ${target.name}${manuallySet ? " · modifié" : ""} ›`
-                          : "Nouvel exercice · modifié ›"}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
-              ListEmptyComponent={
-                <Text style={{ color: colors.textSecondary, textAlign: "center", padding: 12 }}>
-                  Aucun exercice dans ce fichier.
-                </Text>
-              }
-            />
-          </Pressable>
-        </Pressable>
       </Modal>
 
       <Modal
@@ -553,11 +496,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-  },
-  reviewModalHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 12,
   },
 });
