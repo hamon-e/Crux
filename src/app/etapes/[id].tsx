@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { getExerciseById, getExerciseSteps, validateExerciseStep } from '@/db/queries';
+import { getExerciseById, getExerciseSteps, toggleExerciseStepValidation } from '@/db/queries';
 import type { Exercise } from '@/db/types';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
@@ -68,10 +68,10 @@ export default function EtapesScreen() {
               )}
               <Pressable
                 style={[styles.validateButton, { borderColor: step.validated ? '#34c759' : tierColor }]}
-                disabled={step.validated === 1 || validatingStep === step.step_order}
+                disabled={validatingStep === step.step_order}
                 onPress={() => {
                   setValidatingStep(step.step_order);
-                  void validateExerciseStep(db, exerciseId, step.step_order)
+                  void toggleExerciseStepValidation(db, exerciseId, step.step_order)
                     .then(() => getExerciseSteps(db, exerciseId).then(setSteps))
                     .catch((e) => console.warn('Validation de l’étape impossible', e))
                     .finally(() => setValidatingStep(null));
@@ -111,7 +111,7 @@ export default function EtapesScreen() {
         ))}
 
         {steps.length === 0 && (
-          <Text style={{ color: colors.textSecondary }}>Aucune étape enregistrée pour cet exercice.</Text>
+          <Text style={{ color: colors.textSecondary }}>Aucune étape enregistrée pour cette progression.</Text>
         )}
 
         <View style={{ height: 40 }} />

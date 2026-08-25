@@ -366,11 +366,17 @@ function SortableExercise({
             <Text style={{ color: colors.textSecondary, fontSize: 20, fontWeight: '700' }}>☰</Text>
           </Pressable>
         </GestureDetector>
-        <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={48} radius={6} />
-        <Text style={[styles.exerciseName, { color: colors.text }]}>
-          {te.exercise.name}
-          {te.side ? ` (${te.side === 'right' ? 'droite' : 'gauche'})` : ''}
-        </Text>
+        <Pressable
+          style={styles.exerciseLink}
+          onPress={() => router.push(`/exercice/${te.exercise.id}`)}
+          accessibilityRole="link"
+          accessibilityLabel={`Ouvrir l’exercice ${te.exercise.name}`}>
+          <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={48} radius={6} />
+          <Text style={[styles.exerciseName, { color: colors.text }]}>
+            {te.exercise.name}
+            {te.side ? ` (${te.side === 'right' ? 'droite' : 'gauche'})` : ''}
+          </Text>
+        </Pressable>
         <Pressable hitSlop={8} onPress={onRemove}>
           <Text style={{ color: '#FF453A' }}>×</Text>
         </Pressable>
@@ -490,6 +496,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dragHandle: { paddingVertical: 4 },
+  exerciseLink: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   exerciseName: { flex: 1, fontWeight: '700' },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   typeRow: { flexDirection: 'row', gap: 8 },

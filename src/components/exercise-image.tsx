@@ -1,8 +1,11 @@
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 
 import { EXERCISE_IMAGES } from '@/db/exercise-images';
 import { MOBILITY_IMAGES } from '@/db/mobility-images';
+import { getStepImageSource } from '@/db/skill-images';
+import { SKILL_STEPS } from '@/db/skill-steps';
 import { useTheme } from '@/hooks/use-theme';
 
 interface Props {
@@ -102,9 +105,15 @@ function normalizeKey(value: string): string {
 }
 
 let normalizedIndex: Map<string, number> | null = null;
+let skillImageIndex: Map<string, number | { uri: string }> | null = null;
 
-export function getExerciseImageSource(name: string): number | undefined {
-  return EXERCISE_IMAGES[name] ?? MOBILITY_IMAGES[name] ?? lookupNormalized(name);
+export function getExerciseImageSource(name: string): number | { uri: string } | undefined {
+  return (
+    MOBILITY_IMAGES[name] ??
+    lookupSkillImage(name) ??
+    EXERCISE_IMAGES[name] ??
+    lookupNormalized(name)
+  );
 }
 
 /** Retrouve une image même si le nom diffère par la casse ou les accents. */
@@ -117,4 +126,41 @@ function lookupNormalized(name: string): number | undefined {
     );
   }
   return normalizedIndex.get(normalizeKey(name));
+}
+
+/**
+ * Les étapes des compétences sont aussi proposées comme exercices de routine.
+ * Leurs images sont stockées avec le contenu de progression, pas dans les
+ * catalogues force/mobilité : on les indexe donc par nom ici.
+ */
+function lookupSkillImage(name: string): number | { uri: string } | undefined {
+  if (!skillImageIndex) {
+    skillImageIndex = new Map();
+
+    for (const skill of SKILL_STEPS) {
+      const cover = skill.steps
+        .map((step) => toExerciseImageSource(getStepImageSource(step.image)))
+        .find((source): source is number | { uri: string } => source !== null);
+
+      if (cover) skillImageIndex.set(normalizeKey(skill.key), cover);
+
+      for (const step of skill.steps) {
+        // Certaines étapes n'ont pas d'illustration propre : la couverture
+        // de leur compétence reste plus utile que la tuile générique.
+        const source = toExerciseImageSource(getStepImageSource(step.image)) ?? cover;
+        if (source) skillImageIndex.set(normalizeKey(step.name), source);
+      }
+    }
+  }
+
+  return skillImageIndex.get(normalizeKey(name));
+}
+
+function toExerciseImageSource(
+  source: ImageSourcePropType | null,
+): number | { uri: string } | null {
+  if (typeof source === 'number') return source;
+  if (source && !Array.isArray(source) && typeof source.uri === 'string')
+    return { uri: source.uri };
+  return null;
 }

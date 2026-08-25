@@ -256,28 +256,39 @@ export default function SessionScreen() {
           )}
         />
 
-        <View style={[styles.chronoBar, { backgroundColor: colors.backgroundElement }]}>
-          <Text style={[styles.chronoTime, { color: colors.text }]}>{formatElapsed(chronoMs)}</Text>
+        <View style={styles.chronoBar}>
+          <View style={styles.chronoTopRow}>
+            <View style={styles.chronoTitleRow}>
+              <View style={styles.chronoIcon}>
+                <Text style={styles.chronoIconText}>⏱</Text>
+              </View>
+              <View>
+                <Text style={styles.chronoLabel}>Chronomètre</Text>
+                <Text style={styles.chronoStatus}>
+                  {chronoRunning ? 'En cours' : chronoMs > 0 ? 'En pause' : 'Prêt à lancer'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
+          </View>
+
           <View style={styles.chronoActions}>
             <Pressable
-              style={[
-                styles.chronoButton,
-                chronoRunning ? { backgroundColor: '#FF9F0A' } : { backgroundColor: '#007AFF' },
-              ]}
+              style={({ pressed }) => [styles.chronoButton, pressed && styles.chronoButtonPressed]}
               onPress={toggleChrono}>
-              <Text style={styles.chronoButtonText}>{chronoRunning ? 'Pause' : chronoMs > 0 ? 'Reprendre' : 'Démarrer'}</Text>
+              <Text style={styles.chronoButtonText}>
+                {chronoRunning ? 'Pause' : chronoMs > 0 ? 'Reprendre' : 'Démarrer'}
+              </Text>
             </Pressable>
             <Pressable
-              style={[styles.chronoButton, styles.chronoResetButton]}
+              style={({ pressed }) => [
+                styles.chronoResetButton,
+                chronoMs === 0 && !chronoRunning && styles.chronoResetButtonDisabled,
+                pressed && chronoMs > 0 && styles.chronoResetButtonPressed,
+              ]}
               onPress={resetChrono}
               disabled={chronoMs === 0 && !chronoRunning}>
-              <Text
-                style={[
-                  styles.chronoResetText,
-                  { color: chronoMs === 0 && !chronoRunning ? colors.textSecondary : '#FF453A' },
-                ]}>
-                Reset
-              </Text>
+              <Text style={styles.chronoResetText}>Réinitialiser</Text>
             </Pressable>
           </View>
         </View>
@@ -377,18 +388,56 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   chronoBar: {
+    marginHorizontal: 16,
+    marginBottom: 4,
+    padding: 16,
+    gap: 16,
+    borderRadius: 22,
+    backgroundColor: '#FFD60A',
+    shadowColor: '#9A7600',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  chronoTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#8884',
+    gap: 12,
+  },
+  chronoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  chronoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3A6',
+  },
+  chronoIconText: {
+    fontSize: 21,
+  },
+  chronoLabel: {
+    color: '#1C1C1E',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  chronoStatus: {
+    color: '#5C4B00',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   chronoTime: {
-    fontSize: 24,
-    fontWeight: '800',
+    color: '#1C1C1E',
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: -0.5,
     fontVariant: ['tabular-nums'],
   },
   chronoActions: {
@@ -396,21 +445,39 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chronoButton: {
-    borderRadius: 10,
-    paddingVertical: 8,
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 13,
     paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1C1C1E',
   },
   chronoButtonText: {
-    color: '#fff',
+    color: '#FFD60A',
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 15,
+  },
+  chronoButtonPressed: {
+    opacity: 0.78,
   },
   chronoResetButton: {
+    minHeight: 44,
+    borderRadius: 13,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#FF453A55',
+    borderColor: '#1C1C1E55',
+  },
+  chronoResetButtonDisabled: {
+    opacity: 0.4,
+  },
+  chronoResetButtonPressed: {
+    backgroundColor: '#FFFFFF33',
   },
   chronoResetText: {
+    color: '#1C1C1E',
     fontWeight: '700',
     fontSize: 14,
   },

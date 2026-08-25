@@ -23,6 +23,7 @@ import {
   type ImportStats,
 } from "@/db/queries";
 import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from "@/db/types";
+import { createExerciseMatcher } from "@/lib/exercise-matching";
 import { parseStrongCsv, type ParsedWorkout } from "@/lib/strong-csv";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -64,13 +65,14 @@ export default function ImportScreen() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedWorkout[] | null>(null);
   const [unmatched, setUnmatched] = useState<string[]>([]);
-  /** nom CSV -> id d'exercice existant (absent = créer un nouvel exercice). */
-  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  /** nom CSV -> id d'exercice existant (null = créer explicitement un nouvel exercice). */
+  const [overrides, setOverrides] = useState<Record<string, number | null>>({});
   /** nom CSV -> groupe musculaire choisi pour l'exercice importé/matché. */
   const [newMuscles, setNewMuscles] = useState<Record<string, Muscle>>({});
   const [musclePickName, setMusclePickName] = useState<string | null>(null);
   const [exerciseList, setExerciseList] = useState<Exercise[]>([]);
   const [mappingName, setMappingName] = useState<string | null>(null);
+  const [showAllMatches, setShowAllMatches] = useState(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<ImportStats | null>(null);
@@ -83,6 +85,29 @@ export default function ImportScreen() {
   }, [exerciseList, search]);
 
   const exerciseById = useMemo(() => new Map(exerciseList.map((e) => [e.id, e])), [exerciseList]);
+
+  const importExerciseMatches = useMemo(() => {
+    if (!parsed) return [];
+    const matcher = createExerciseMatcher(exerciseList);
+    const names = new Set(parsed.flatMap((workout) => workout.sets.map((set) => set.exerciseName)));
+    return [...names]
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, automaticTarget: matcher.find(name) }));
+  }, [exerciseList, parsed]);
+
+  const visibleImportMatches = useMemo(() => {
+    if (showAllMatches) return importExerciseMatches;
+    const unmatchedNames = new Set(unmatched);
+    return importExerciseMatches.filter((match) => unmatchedNames.has(match.name));
+  }, [importExerciseMatches, showAllMatches, unmatched]);
+
+  function targetFor(name: string, automaticTarget: Exercise | null) {
+    if (Object.prototype.hasOwnProperty.call(overrides, name)) {
+      const overrideId = overrides[name];
+      return overrideId === null ? null : (exerciseById.get(overrideId) ?? null);
+    }
+    return automaticTarget;
+  }
 
   const unilateralCount = parsed
     ? new Set(
@@ -106,6 +131,7 @@ export default function ImportScreen() {
     setOverrides({});
     setNewMuscles({});
     setFileName(null);
+    setShowAllMatches(false);
 
     setBusy(true);
     try {
@@ -127,6 +153,7 @@ export default function ImportScreen() {
       setFileName(picked.name);
       setParsed(parsedWorkouts);
       setUnmatched(unmatchedNames);
+      setShowAllMatches(unmatchedNames.length === 0);
       setExerciseList(exercises);
     } catch (e) {
       setError(`Impossible de lire ce fichier.${e instanceof Error ? ` (${e.message})` : ""}`);
@@ -146,6 +173,7 @@ export default function ImportScreen() {
       setOverrides({});
       setNewMuscles({});
       setFileName(null);
+      setShowAllMatches(false);
       setError(null);
     } catch (e) {
       setError(`Erreur pendant l'import.${e instanceof Error ? ` (${e.message})` : ""}`);
@@ -164,8 +192,7 @@ export default function ImportScreen() {
     const name = mappingName;
     setOverrides((prev) => {
       const next = { ...prev };
-      if (id === null) delete next[name];
-      else next[name] = id;
+      next[name] = id;
       return next;
     });
     setMappingName(null);
@@ -211,17 +238,35 @@ export default function ImportScreen() {
                 gauche.
               </Text>
             )}
-            {unmatched.length > 0 && (
-              <View>
-                <Text style={{ color: colors.text, fontWeight: "700" }}>
-                  Nouveaux exercices ({unmatched.length})
-                </Text>
-                <Text style={{ color: colors.textSecondary }}>
-                  Associe-les à un exercice existant ou choisis leur groupe musculaire, sinon ils
-                  seront créés en Full body.
-                </Text>
-                {unmatched.map((name) => {
-                  const target = overrides[name] ? exerciseById.get(overrides[name]) : null;
+            {importExerciseMatches.length > 0 && (
+              <View style={styles.reviewSection}>
+                <View style={styles.reviewHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {showAllMatches ? "Toutes les correspondances" : "Nouveaux exercices"} (
+                      {visibleImportMatches.length})
+                    </Text>
+                    <Text style={{ color: colors.textSecondary }}>
+                      {showAllMatches
+                        ? "Touche une ligne pour modifier son association."
+                        : "Associe les nouveaux exercices ou choisis leur groupe musculaire."}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={[styles.reviewButton, { borderColor: colors.backgroundSelected }]}
+                    onPress={() => setShowAllMatches((current) => !current)}
+                  >
+                    <Text style={{ color: "#007AFF", fontWeight: "700" }}>
+                      {showAllMatches
+                        ? `Voir nouveaux (${unmatched.length})`
+                        : `Voir tout (${importExerciseMatches.length})`}
+                    </Text>
+                  </Pressable>
+                </View>
+                {visibleImportMatches.map(({ name, automaticTarget }) => {
+                  const isUnmatched = unmatched.includes(name);
+                  const manuallySet = Object.prototype.hasOwnProperty.call(overrides, name);
+                  const target = targetFor(name, automaticTarget);
                   const selectedMuscle = newMuscles[name] ?? target?.muscle ?? "fullbody";
                   return (
                     <View key={name} style={styles.matchRow}>
@@ -231,25 +276,29 @@ export default function ImportScreen() {
                         </Text>
                         <Text
                           style={{
-                            color: target ? "#30D158" : colors.textSecondary,
+                            color: target ? "#30D158" : "#FF9F0A",
                             fontWeight: "600",
                           }}
                           numberOfLines={1}
                         >
-                          {target ? `→ ${target.name} ›` : "Nouvel exercice ›"}
+                          {target
+                            ? `→ ${target.name}${manuallySet ? " · modifié" : ""} ›`
+                            : "Nouvel exercice ›"}
                         </Text>
                       </Pressable>
-                      <Pressable
-                        style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
-                        onPress={() => {
-                          setSearch("");
-                          setMusclePickName(name);
-                        }}
-                      >
-                        <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
-                          {MUSCLE_LABELS[selectedMuscle] ?? selectedMuscle}
-                        </Text>
-                      </Pressable>
+                      {isUnmatched && (
+                        <Pressable
+                          style={[styles.muscleChip, { borderColor: colors.backgroundSelected }]}
+                          onPress={() => {
+                            setSearch("");
+                            setMusclePickName(name);
+                          }}
+                        >
+                          <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
+                            {MUSCLE_LABELS[selectedMuscle] ?? selectedMuscle}
+                          </Text>
+                        </Pressable>
+                      )}
                     </View>
                   );
                 })}
@@ -436,4 +485,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipActive: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
+  reviewSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#8884",
+    paddingTop: 14,
+  },
+  reviewHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  reviewButton: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
 });

@@ -1,4 +1,4 @@
-import type { SkillExercise } from '@/db/queries';
+import type { Progression } from '@/db/queries';
 
 export const TIERS = ['fundamental', 'beginner', 'intermediate', 'advanced', 'ultimate'] as const;
 export type Tier = (typeof TIERS)[number];
@@ -30,7 +30,7 @@ export const TIER_COLORS: Record<Tier, string> = {
 /** Progression moyenne requise dans le palier précédent pour débloquer le suivant. */
 export const UNLOCK_THRESHOLD = 0.5;
 
-export interface SkillNode extends SkillExercise {
+export interface SkillNode extends Progression {
   tier: Tier;
   progress: number;
   mastered: boolean;
@@ -46,8 +46,8 @@ export function tierOf(difficulty: string): Tier {
  * par palier (au moins la moitié du palier précédent de la même catégorie
  * doit être maîtrisée). Les fondamentaux sont toujours débloqués.
  */
-export function buildSkillTree(skills: SkillExercise[]): Record<Tier, SkillNode[]> {
-  const nodes: SkillNode[] = skills.map((s) => ({
+export function buildSkillTree(progressions: Progression[]): Record<Tier, SkillNode[]> {
+  const nodes: SkillNode[] = progressions.map((s) => ({
     ...s,
     tier: tierOf(s.difficulty),
     progress: s.sessions > 0 ? 1 : 0,

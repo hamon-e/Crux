@@ -7,7 +7,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 16;
+export const DATABASE_VERSION = 18;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -475,6 +475,79 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
           );
         }
       }
+    });
+  }
+
+  if (currentDbVersion < 17) {
+    // v17 : rattache les séances importées à la routine de même nom et
+    // récupère la couleur des anciennes séances créées avant le snapshot
+    // de couleur dans workouts.
+    await db.execAsync(`
+UPDATE workouts
+SET template_id = (
+  SELECT t.id FROM templates t
+  WHERE t.name = workouts.name
+  ORDER BY t.id LIMIT 1
+)
+WHERE template_id IS NULL
+  AND EXISTS (SELECT 1 FROM templates t WHERE t.name = workouts.name);
+
+UPDATE workouts
+SET color = COALESCE(
+  NULLIF((SELECT t.color FROM templates t WHERE t.id = workouts.template_id), ''),
+  ''
+)
+WHERE COALESCE(color, '') = ''
+  AND template_id IS NOT NULL;
+`);
+  }
+
+  if (currentDbVersion < 18) {
+    // v18 : remplace les regroupements « full body » par le muscle principal
+    // de chaque compétence et exercice de mobilité. Les exercices personnalisés
+    // sont volontairement exclus pour préserver le choix de l'utilisateur.
+    await db.execAsync(
+      'CREATE TEMP TABLE IF NOT EXISTS _catalog_muscles (name TEXT PRIMARY KEY, muscle TEXT NOT NULL)'
+    );
+    await db.withTransactionAsync(async () => {
+      for (const [name, , , muscle] of SEED_EXERCISES) {
+        await db.runAsync(
+          'INSERT OR REPLACE INTO _catalog_muscles (name, muscle) VALUES (?, ?)',
+          name,
+          muscle
+        );
+      }
+      for (const [name, , , muscle] of MOBILITY_EXERCISES) {
+        await db.runAsync(
+          'INSERT OR REPLACE INTO _catalog_muscles (name, muscle) VALUES (?, ?)',
+          name,
+          muscle
+        );
+      }
+      await db.execAsync(`
+UPDATE exercises
+SET muscle = (SELECT c.muscle FROM _catalog_muscles c WHERE c.name = exercises.name)
+WHERE is_custom = 0 AND name IN (SELECT name FROM _catalog_muscles);
+`);
+
+      // Les étapes de progression sont des exercices standard dérivés de leur
+      // compétence parente : elles doivent suivre sa nouvelle classification.
+      const skills = await db.getAllAsync<{ name: string; muscle: string }>(
+        "SELECT name, muscle FROM exercises WHERE is_custom = 0 AND COALESCE(category, '') != ''"
+      );
+      const skillByKey = new Map(skills.map((skill) => [normalizeSkillName(skill.name), skill]));
+      for (const entry of SKILL_STEPS) {
+        const parent = skillByKey.get(entry.key);
+        if (!parent) continue;
+        for (const step of entry.steps) {
+          await db.runAsync(
+            'UPDATE exercises SET muscle = ? WHERE name = ? AND is_custom = 0',
+            parent.muscle,
+            step.name
+          );
+        }
+      }
+      await db.execAsync('DROP TABLE _catalog_muscles');
     });
   }
 

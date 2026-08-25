@@ -8,12 +8,66 @@ const MUSCLE_BY_CATEGORY: Record<string, Muscle> = {
   abs: "core",
   back: "back",
   legs: "quads",
-  "upper body": "fullbody",
-  skill: "fullbody",
+};
+
+// Les catégories « upper body » et « skill » sont trop larges pour alimenter
+// les statistiques. Chaque compétence est donc rattachée à son moteur
+// principal (les muscles secondaires restent visibles dans ses étapes).
+const MUSCLE_BY_EXERCISE: Partial<Record<string, Muscle>> = {
+  'Handstand Lower to Planche': 'shoulders',
+  'Dips Fundamental': 'triceps',
+  'Handstand Fundamental': 'shoulders',
+  'Pull-up Fundamental': 'back',
+  'Pushup Fundamental': 'chest',
+  'Bear Walk': 'shoulders',
+  'Calf Raises': 'calves',
+  'Downward Dog': 'hamstrings',
+  'Forward Roll': 'core',
+  'Backward Roll': 'core',
+  'Bridge': 'shoulders',
+  'Cartwheel': 'shoulders',
+  'Cartwheel with One Leg Bent': 'shoulders',
+  'Elevated Bridge (Bridge Prep)': 'shoulders',
+  'Forearm Stand STAGE 1: Wall': 'shoulders',
+  'Forearm Stand STAGE 2. Freestanding': 'shoulders',
+  'Forward Dips': 'triceps',
+  'Forward roll+cartwheel': 'shoulders',
+  'Freestanding Headstand': 'shoulders',
+  'Jumping Grasshopper Pullup': 'back',
+  'Kick +Wall Handstand': 'shoulders',
+  'Knee Bent Dips': 'triceps',
+  'Wall Headstand': 'shoulders',
+  'Bridge Hip Sit and Extend': 'shoulders',
+  'Bridge Pushups': 'shoulders',
+  'Cartwheel with Opposite Hand': 'shoulders',
+  'Cartwheel with Opposite Leg': 'shoulders',
+  'Decline One Arm Pushup': 'chest',
+  'Diamond Bridge (Advanced Bridge)': 'shoulders',
+  'Freestanding Handstand': 'shoulders',
+  'Freestanding Handstand Pushup': 'shoulders',
+  'Handstand Pirouettes': 'shoulders',
+  'Handstand Shoulder Taps': 'shoulders',
+  'Handstand Walk': 'shoulders',
+  'Kipping Bar Muscle Up': 'back',
+  'Kipping Ring Muscle Up': 'back',
+  'L-Sit Dips': 'triceps',
+  'Muscle Up Intro': 'back',
+  'One Arm Pullup': 'back',
+  'One Arm Pushup': 'chest',
+  'Press Handstand': 'shoulders',
+  'Ring Dips': 'triceps',
+  'Strict Ring Muscle Up': 'back',
+  'Wall Handstand Pushup': 'shoulders',
 };
 
 function row(name: string, difficulty: string, category: string, equipment: Equipment = "bodyweight"): SeedExercise {
-  return [name, difficulty, category, MUSCLE_BY_CATEGORY[category] ?? "fullbody", equipment];
+  return [
+    name,
+    difficulty,
+    category,
+    MUSCLE_BY_EXERCISE[name] ?? MUSCLE_BY_CATEGORY[category] ?? "fullbody",
+    equipment,
+  ];
 }
 
 export const SEED_EXERCISES: readonly SeedExercise[] = [

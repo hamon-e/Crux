@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import {
@@ -21,6 +21,7 @@ import { SIDE_LABELS } from '@/components/workout-exercise-card';
 import {
   getExerciseById,
   getExerciseHistory,
+  getExerciseProgression,
   getExerciseSteps,
   updateExerciseImage,
   updateExerciseMuscle,
@@ -33,10 +34,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
-
-const CHART_HEIGHT = 130;
-const LABEL_SPACE = 34;
-const BAR_MAX = CHART_HEIGHT - LABEL_SPACE;
+type ProgressionReference = Awaited<ReturnType<typeof getExerciseProgression>>;
 
 export default function ExerciseScreen() {
   const db = useSQLiteContext();
@@ -44,14 +42,23 @@ export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [exercise, setExercise] = useState<Awaited<ReturnType<typeof getExerciseById>>>(null);
   const [history, setHistory] = useState<History>([]);
+  const [progression, setProgression] = useState<ProgressionReference>(null);
   const [coverImage, setCoverImage] = useState<ReturnType<typeof getStepImageSource>>(null);
   const [muscleOpen, setMuscleOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       void (async () => {
-        setExercise(await getExerciseById(db, Number(id)));
+        const selectedExercise = await getExerciseById(db, Number(id));
+        // Une progression a sa propre vue : elle ne doit jamais être présentée
+        // comme un exercice, même si une ancienne URL y mène.
+        if (selectedExercise?.category) {
+          router.replace(`/progression/${selectedExercise.id}`);
+          return;
+        }
+        setExercise(selectedExercise);
         setHistory(await getExerciseHistory(db, Number(id)));
+        setProgression(await getExerciseProgression(db, Number(id)));
         getExerciseSteps(db, Number(id))
           .then((steps) => setCoverImage(getStepImageSource(steps.find((s) => s.image)?.image)))
           .catch((e) => console.warn('Impossible de lire les étapes', e));
@@ -62,18 +69,16 @@ export default function ExerciseScreen() {
   if (!exercise) return null;
   const currentExercise = exercise;
 
-  const recent = history.slice(-12);
-  const max1rm = Math.max(1, ...recent.map((h) => h.best_1rm));
-
   async function handleMuscleChange(muscle: string) {
     await updateExerciseMuscle(db, exercise!.id, muscle);
     setMuscleOpen(false);
     setExercise({ ...exercise!, muscle });
   }
 
-  function openMedia() {
-    const url = exercise?.video_url;
-    if (url) void Linking.openURL(url);
+  function openMedia(url: string) {
+    void Linking.openURL(url).catch((error) => {
+      console.warn("Impossible d'ouvrir la vidéo de l'exercice", error);
+    });
   }
 
   async function handleUploadImage() {
@@ -109,21 +114,35 @@ export default function ExerciseScreen() {
   const bundledImage = getExerciseImageSource(exercise.name);
   const imageUri = exercise.image_uri || undefined;
   const hasImage = Boolean(coverImage || imageUri || bundledImage);
-  const handleImagePress = hasImage ? openMedia : handleUploadImage;
+  const videoUrl = exercise.video_url?.trim();
+  const hasVideo = Boolean(videoUrl);
+  const canOpenVideo = hasImage && hasVideo;
+  const canUploadImage = !hasImage;
+  const handleImagePress = canOpenVideo
+    ? () => openMedia(videoUrl!)
+    : canUploadImage
+      ? handleUploadImage
+      : undefined;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         <Pressable
-          onPress={() => void handleImagePress()}
-          disabled={hasImage && !exercise.video_url}
-          accessibilityRole="button"
-          accessibilityLabel={hasImage ? 'Voir la vidéo de l’exercice' : 'Ajouter une image'}
-          accessibilityHint={hasImage ? undefined : "Ouvre le sélecteur d'images"}>
+          onPress={handleImagePress}
+          disabled={!canOpenVideo && !canUploadImage}
+          accessibilityRole={canOpenVideo || canUploadImage ? 'button' : undefined}
+          accessibilityLabel={
+            canOpenVideo
+              ? 'Voir la vidéo de l’exercice'
+              : canUploadImage
+                ? 'Ajouter une image'
+                : undefined
+          }
+          accessibilityHint={canUploadImage ? "Ouvre le sélecteur d'images" : undefined}>
           {coverImage ? (
             <View>
               <Image source={coverImage} style={styles.hero} resizeMode="cover" />
-              {!!exercise.video_url && (
+              {hasVideo && (
                 <View style={styles.playBadge}>
                   <Text style={styles.playIcon}>▶</Text>
                   <Text style={styles.playLabel}>Voir la vidéo</Text>
@@ -131,14 +150,22 @@ export default function ExerciseScreen() {
               )}
             </View>
           ) : (
-            <ExerciseImage
-              name={exercise.name}
-              muscle={exercise.muscle}
-              imageUri={imageUri}
-              emptyLabel={!hasImage ? 'Ajouter une image' : undefined}
-              fullWidth
-              radius={14}
-            />
+            <View>
+              <ExerciseImage
+                name={exercise.name}
+                muscle={exercise.muscle}
+                imageUri={imageUri}
+                emptyLabel={!hasImage ? 'Ajouter une image' : undefined}
+                fullWidth
+                radius={14}
+              />
+              {hasImage && hasVideo && (
+                <View style={styles.playBadge}>
+                  <Text style={styles.playIcon}>▶</Text>
+                  <Text style={styles.playLabel}>Voir la vidéo</Text>
+                </View>
+              )}
+            </View>
           )}
         </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>{exercise.name}</Text>
@@ -149,35 +176,16 @@ export default function ExerciseScreen() {
         </Pressable>
         <ExerciseOriginTag isCustom={exercise.is_custom} />
 
-        <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 12 }}>
-            1RM estimé par séance
-          </Text>
-          <View style={styles.chartRow}>
-            {recent.length === 0 && (
-              <Text style={{ color: colors.textSecondary }}>Pas encore de données.</Text>
-            )}
-            {recent.map((h) => (
-              <View key={h.started_at} style={styles.barColumn}>
-                <Text style={{ fontSize: 9, color: colors.textSecondary }}>
-                  {Math.round(h.best_1rm)}
-                </Text>
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: Math.max(4, (h.best_1rm / max1rm) * BAR_MAX),
-                      backgroundColor: '#007AFF',
-                    },
-                  ]}
-                />
-                <Text style={{ fontSize: 9, color: colors.textSecondary }}>
-                  {h.date.slice(8, 10)}/{h.date.slice(5, 7)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
+        {progression && (
+          <Pressable
+            style={[styles.progressionButton, { borderColor: colors.backgroundSelected }]}
+            onPress={() => router.push(`/progression/${progression.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Voir la progression ${progression.name}`}>
+            <Text style={[styles.progressionButtonTitle, { color: colors.text }]}>↗ Voir la progression</Text>
+            <Text style={{ color: colors.textSecondary }}>{progression.name}</Text>
+          </Pressable>
+        )}
 
         <View style={[styles.card, { backgroundColor: colors.backgroundElement, gap: 6 }]}>
           <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 4 }}>
@@ -186,24 +194,49 @@ export default function ExerciseScreen() {
           {history.length === 0 && (
             <Text style={{ color: colors.textSecondary }}>Aucune série validée.</Text>
           )}
-          {[...history].reverse().map((h) => (
-            <View key={h.started_at}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.text }}>{h.date}</Text>
-                <Text style={{ color: colors.textSecondary }}>
-                  max {h.top_weight} kg · {h.total_reps} reps
-                </Text>
+          {[...history].reverse().map((h) => {
+            const sideDetails = h.side_details;
+            const hasBothSides = Boolean(sideDetails?.left && sideDetails?.right);
+            const showSideWeights = h.top_weight > 0;
+
+            return (
+              <View key={h.started_at}>
+                {hasBothSides ? (
+                  <>
+                    <Text style={{ color: colors.text }}>{h.date}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
+                      {SIDE_LABELS.right} :{' '}
+                      {showSideWeights
+                        ? `${sideDetails?.right?.top_weight ?? 0} kg`
+                        : `${sideDetails?.right?.best_set_reps ?? 0} reps`}
+                      {' · '}
+                      {SIDE_LABELS.left} :{' '}
+                      {showSideWeights
+                        ? `${sideDetails?.left?.top_weight ?? 0} kg`
+                        : `${sideDetails?.left?.best_set_reps ?? 0} reps`}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: colors.text }}>{h.date}</Text>
+                      <Text style={{ color: colors.textSecondary }}>
+                        max {h.top_weight} kg · {h.best_set_reps} reps
+                      </Text>
+                    </View>
+                    {sideDetails && (
+                      <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
+                        {SIDE_LABELS.right} : {sideDetails.right?.best_set_reps ?? 0} reps
+                        {' · '}
+                        {SIDE_LABELS.left} : {sideDetails.left?.best_set_reps ?? 0} reps
+                        {!sideDetails.left || !sideDetails.right ? ' (côté manquant)' : ''}
+                      </Text>
+                    )}
+                  </>
+                )}
               </View>
-              {h.side_details && (
-                <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'right' }}>
-                  {SIDE_LABELS.right} : {h.side_details.right?.total_reps ?? 0} reps
-                  {' · '}
-                  {SIDE_LABELS.left} : {h.side_details.left?.total_reps ?? 0} reps
-                  {(!h.side_details.left || !h.side_details.right) ? ' (côté manquant)' : ''}
-                </Text>
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -267,25 +300,14 @@ const styles = StyleSheet.create({
   },
   playIcon: { color: '#fff', fontSize: 13 },
   playLabel: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  card: { borderRadius: 14, padding: 16 },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 130,
-    gap: 6,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
+  progressionButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 14,
     gap: 4,
   },
-  bar: {
-    width: '100%',
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-  },
+  progressionButtonTitle: { fontWeight: '800' },
+  card: { borderRadius: 14, padding: 16 },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',

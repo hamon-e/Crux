@@ -7,7 +7,6 @@ import { useSQLiteContext } from 'expo-sqlite';
 import {
   deleteWorkout,
   duplicateWorkout,
-  estimate1rm,
   getWorkoutDetail,
 } from '@/db/queries';
 import { SIDE_LABELS } from '@/components/workout-exercise-card';
@@ -124,11 +123,6 @@ function SetLine({ index, set }: { index: number; set: WorkoutSet }) {
         {set.weight > 0 ? `${set.weight} kg` : 'Poids du corps'}
       </Text>
       <Text style={{ color: colors.text }}> × {set.reps} reps</Text>
-      {set.weight > 0 && set.reps > 0 && (
-        <Text style={{ color: colors.textSecondary, marginLeft: 8 }}>
-          (1RM ≈ {Math.round(estimate1rm(set.weight, set.reps))} kg)
-        </Text>
-      )}
     </View>
   );
 }
