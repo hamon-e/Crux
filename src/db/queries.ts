@@ -63,6 +63,45 @@ export async function getExerciseById(db: SQLiteDatabase, id: number): Promise<E
   return db.getFirstAsync<Exercise>("SELECT * FROM exercises WHERE id = ?", id);
 }
 
+/** Exercices livrés avec l'application, proposés pour remplacer un exercice personnalisé. */
+export async function getDefaultExercises(db: SQLiteDatabase): Promise<Exercise[]> {
+  return db.getAllAsync<Exercise>(
+    `SELECT * FROM exercises
+     WHERE is_custom = 0 AND COALESCE(category, '') = ''
+     ORDER BY name`,
+  );
+}
+
+/**
+ * Remplace définitivement un exercice personnalisé par un exercice du catalogue.
+ * Les séries et les références dans les routines sont conservées sous l'exercice cible.
+ */
+export async function matchCustomExerciseToDefault(
+  db: SQLiteDatabase,
+  customExerciseId: number,
+  defaultExerciseId: number,
+) {
+  if (customExerciseId === defaultExerciseId) {
+    throw new Error('Les deux exercices doivent être différents.');
+  }
+
+  await db.withTransactionAsync(async () => {
+    const source = await getExerciseById(db, customExerciseId);
+    const target = await getExerciseById(db, defaultExerciseId);
+    if (!source?.is_custom || !target || target.is_custom || target.category) {
+      throw new Error('Association d’exercices invalide.');
+    }
+
+    await db.runAsync('UPDATE sets SET exercise_id = ? WHERE exercise_id = ?', defaultExerciseId, customExerciseId);
+    await db.runAsync(
+      'UPDATE template_exercises SET exercise_id = ? WHERE exercise_id = ?',
+      defaultExerciseId,
+      customExerciseId,
+    );
+    await db.runAsync('DELETE FROM exercises WHERE id = ?', customExerciseId);
+  });
+}
+
 export interface ProgressionReference {
   id: number;
   name: string;

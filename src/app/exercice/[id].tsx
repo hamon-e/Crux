@@ -11,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -20,18 +21,21 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { SIDE_LABELS } from '@/components/workout-exercise-card';
 import {
   getExerciseById,
+  getDefaultExercises,
   getExerciseHistory,
   getExerciseProgression,
   getExerciseSteps,
+  matchCustomExerciseToDefault,
   updateExerciseImage,
   updateExerciseMuscle,
 } from '@/db/queries';
 import { MUSCLES, MUSCLE_LABELS } from '@/db/types';
+import type { Exercise } from '@/db/types';
 import { ExerciseImage, getExerciseImageSource } from '@/components/exercise-image';
 import { ExerciseOriginTag } from '@/components/exercise-origin-tag';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
-import { alert } from '@/lib/alert';
+import { alert, confirm } from '@/lib/alert';
 
 type History = Awaited<ReturnType<typeof getExerciseHistory>>;
 type ProgressionReference = Awaited<ReturnType<typeof getExerciseProgression>>;
@@ -45,6 +49,10 @@ export default function ExerciseScreen() {
   const [progression, setProgression] = useState<ProgressionReference>(null);
   const [coverImage, setCoverImage] = useState<ReturnType<typeof getStepImageSource>>(null);
   const [muscleOpen, setMuscleOpen] = useState(false);
+  const [matchOpen, setMatchOpen] = useState(false);
+  const [defaultExercises, setDefaultExercises] = useState<Exercise[]>([]);
+  const [matchSearch, setMatchSearch] = useState('');
+  const [isMatching, setIsMatching] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,6 +81,46 @@ export default function ExerciseScreen() {
     await updateExerciseMuscle(db, exercise!.id, muscle);
     setMuscleOpen(false);
     setExercise({ ...exercise!, muscle });
+  }
+
+  async function openMatchPicker() {
+    try {
+      setDefaultExercises(await getDefaultExercises(db));
+      setMatchSearch('');
+      setMatchOpen(true);
+    } catch (error) {
+      console.warn('Impossible de charger les exercices par défaut', error);
+      alert('Erreur', 'Les exercices par défaut ne peuvent pas être chargés.');
+    }
+  }
+
+  function confirmMatch(target: Exercise) {
+    confirm(
+      'Associer cet exercice ?',
+      `L’historique et les routines de « ${currentExercise.name} » seront transférés vers « ${target.name} ». L’exercice personnalisé sera ensuite supprimé.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Associer et supprimer',
+          style: 'destructive',
+          onPress: () => void handleMatch(target),
+        },
+      ],
+    );
+  }
+
+  async function handleMatch(target: Exercise) {
+    setIsMatching(true);
+    try {
+      await matchCustomExerciseToDefault(db, currentExercise.id, target.id);
+      setMatchOpen(false);
+      router.replace(`/exercice/${target.id}`);
+    } catch (error) {
+      console.warn('Impossible d’associer les exercices', error);
+      alert('Association impossible', 'Les données de cet exercice n’ont pas été modifiées.');
+    } finally {
+      setIsMatching(false);
+    }
   }
 
   function openMedia(url: string) {
@@ -123,6 +171,9 @@ export default function ExerciseScreen() {
     : canUploadImage
       ? handleUploadImage
       : undefined;
+  const matchingExercises = defaultExercises.filter((candidate) =>
+    candidate.name.toLocaleLowerCase().includes(matchSearch.toLocaleLowerCase().trim()),
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -175,6 +226,19 @@ export default function ExerciseScreen() {
           </Text>
         </Pressable>
         <ExerciseOriginTag isCustom={exercise.is_custom} />
+
+        {exercise.is_custom === 1 && (
+          <Pressable
+            style={[styles.matchButton, { borderColor: colors.backgroundSelected }]}
+            onPress={() => void openMatchPicker()}
+            accessibilityRole="button"
+            accessibilityLabel="Associer à un exercice par défaut">
+            <Text style={[styles.matchButtonTitle, { color: colors.text }]}>⇄ Associer à un exercice par défaut</Text>
+            <Text style={{ color: colors.textSecondary }}>
+              Transfère l’historique puis supprime cet exercice.
+            </Text>
+          </Pressable>
+        )}
 
         {progression && (
           <Pressable
@@ -264,6 +328,48 @@ export default function ExerciseScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal visible={matchOpen} animationType="slide" onRequestClose={() => setMatchOpen(false)}>
+        <SafeAreaView style={[styles.matchModal, { backgroundColor: colors.background }]}>
+          <View style={styles.matchHeader}>
+            <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Exercice par défaut</Text>
+            <Pressable onPress={() => setMatchOpen(false)} disabled={isMatching} accessibilityRole="button">
+              <Text style={{ color: colors.textSecondary }}>Annuler</Text>
+            </Pressable>
+          </View>
+          <Text style={{ color: colors.textSecondary }}>
+            Choisis l’exercice qui recevra l’historique de « {currentExercise.name} ».
+          </Text>
+          <TextInput
+            value={matchSearch}
+            onChangeText={setMatchSearch}
+            placeholder="Rechercher un exercice"
+            placeholderTextColor={colors.textSecondary}
+            style={[styles.searchInput, { borderColor: colors.backgroundSelected, color: colors.text }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <ScrollView contentContainerStyle={styles.matchList} keyboardShouldPersistTaps="handled">
+            {matchingExercises.map((candidate) => (
+              <Pressable
+                key={candidate.id}
+                style={[styles.matchItem, { backgroundColor: colors.backgroundElement }]}
+                onPress={() => confirmMatch(candidate)}
+                disabled={isMatching}
+                accessibilityRole="button"
+                accessibilityLabel={`Associer à ${candidate.name}`}>
+                <Text style={[styles.matchItemTitle, { color: colors.text }]}>{candidate.name}</Text>
+                <Text style={{ color: colors.textSecondary }}>
+                  {MUSCLE_LABELS[candidate.muscle] ?? candidate.muscle} · {candidate.equipment}
+                </Text>
+              </Pressable>
+            ))}
+            {matchingExercises.length === 0 && (
+              <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>Aucun exercice trouvé.</Text>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -307,6 +413,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   progressionButtonTitle: { fontWeight: '800' },
+  matchButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 14,
+    gap: 4,
+  },
+  matchButtonTitle: { fontWeight: '800' },
   card: { borderRadius: 14, padding: 16 },
   modalBackdrop: {
     flex: 1,
@@ -340,4 +453,16 @@ const styles = StyleSheet.create({
     borderColor: '#007AFF',
     color: '#fff',
   },
+  matchModal: { flex: 1, padding: 24, gap: 16 },
+  matchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  matchList: { gap: 8, paddingBottom: 24 },
+  matchItem: { borderRadius: 12, padding: 14, gap: 3 },
+  matchItemTitle: { fontWeight: '700', fontSize: 16 },
 });
