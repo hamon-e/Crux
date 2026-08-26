@@ -19,6 +19,7 @@ import { addSet, addTemplateExercise, createExercise, getActiveWorkout, getExerc
 import { EQUIPMENT, MUSCLES, MUSCLE_LABELS, type Exercise } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
+import { beginExerciseTreeSelection } from '@/lib/exercise-tree-selection';
 
 const TAGS = [
   { value: 'strength', label: 'Force' },
@@ -76,6 +77,26 @@ export default function AddExerciseScreen() {
     }
   }
 
+  function searchInSkillTree() {
+    if (mode !== 'template' || !params.templateId) return;
+    const templateId = Number(params.templateId);
+
+    beginExerciseTreeSelection({
+      title: 'Ajouter à la routine',
+      onSelect: async (exerciseId) => {
+        await addTemplateExercise(db, templateId, exerciseId);
+        router.dismissTo(`/routines/${templateId}`);
+      },
+    });
+    const treeSearch = search.trim();
+    router.push({
+      pathname: '/(tabs)/arbre',
+      params: treeSearch
+        ? { search: treeSearch, selectExercise: '1' }
+        : { selectExercise: '1' },
+    });
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.searchRow}>
@@ -87,6 +108,11 @@ export default function AddExerciseScreen() {
           onChangeText={setSearch}
           autoCorrect={false}
         />
+        {mode === 'template' && params.templateId && (
+          <Pressable onPress={searchInSkillTree} accessibilityRole="button">
+            <Text style={{ color: '#007AFF', fontWeight: '600' }}>Arbre</Text>
+          </Pressable>
+        )}
         <Pressable onPress={() => setCreateOpen(true)}>
           <Text style={{ color: '#007AFF', fontWeight: '600' }}>+ Créer</Text>
         </Pressable>
