@@ -24,6 +24,7 @@ import { beginExerciseTreeSelection } from '@/lib/exercise-tree-selection';
 const TAGS = [
   { value: 'strength', label: 'Force' },
   { value: 'mobility', label: 'Mobilité' },
+  { value: 'climbing', label: 'Escalade' },
 ];
 
 export default function AddExerciseScreen() {
@@ -178,6 +179,7 @@ export default function AddExerciseScreen() {
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
                 {MUSCLE_LABELS[item.muscle] ?? item.muscle} · {item.equipment}
                 {item.tags?.includes('mobility') ? ' · mobilité' : ''}
+                {item.tags?.includes('climbing') ? ' · escalade' : ''}
               </Text>
               <ExerciseOriginTag isCustom={item.is_custom} compact />
             </View>

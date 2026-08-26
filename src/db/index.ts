@@ -2,12 +2,13 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { SEED_EXERCISES } from './seed-exercises';
 import { MOBILITY_EXERCISES } from './mobility-exercises';
+import { CLIMBING_EXERCISES } from './climbing-exercises';
 import { normalizeSkillName, SKILL_STEPS } from './skill-steps';
 import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 19;
+export const DATABASE_VERSION = 20;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -567,6 +568,40 @@ CREATE TABLE IF NOT EXISTS import_exercise_mappings (
   target_muscle TEXT NOT NULL DEFAULT 'fullbody'
 );
 `);
+  }
+
+  if (currentDbVersion < 20) {
+    // v20 : exercices d'escalade issus de l'export Crimpd utilisateur.
+    // Le tag est fusionné pour conserver les éventuels tags déjà présents.
+    await db.execAsync(
+      'CREATE TEMP TABLE IF NOT EXISTS _climbing (name TEXT PRIMARY KEY, muscle TEXT NOT NULL, equipment TEXT NOT NULL)'
+    );
+    await db.withTransactionAsync(async () => {
+      for (const [name, muscle, equipment] of CLIMBING_EXERCISES) {
+        await db.runAsync(
+          'INSERT OR REPLACE INTO _climbing (name, muscle, equipment) VALUES (?, ?, ?)',
+          name,
+          muscle,
+          equipment
+        );
+      }
+      await db.execAsync(`
+INSERT OR IGNORE INTO exercises (name, muscle, equipment, is_custom, tags)
+SELECT name, muscle, equipment, 0, 'climbing' FROM _climbing;
+
+UPDATE exercises
+SET muscle = (SELECT c.muscle FROM _climbing c WHERE c.name = exercises.name),
+    equipment = (SELECT c.equipment FROM _climbing c WHERE c.name = exercises.name),
+    tags = CASE
+      WHEN (',' || COALESCE(tags, '') || ',') LIKE '%,climbing,%' THEN tags
+      WHEN COALESCE(tags, '') = '' THEN 'climbing'
+      ELSE tags || ',climbing'
+    END
+WHERE is_custom = 0 AND name IN (SELECT name FROM _climbing);
+
+DROP TABLE _climbing;
+`);
+    });
   }
 
   // v14+ : synchronisation des étapes de progression (avec images) et des
