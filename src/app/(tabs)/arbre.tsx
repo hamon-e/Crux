@@ -5,7 +5,8 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { File, Paths } from 'expo-file-system';
 
-import { getProgressions } from '@/db/queries';
+import { getExercises, getProgressions } from '@/db/queries';
+import type { Exercise } from '@/db/types';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
 import { alert } from '@/lib/alert';
@@ -21,6 +22,7 @@ import {
   progressionMatchesSearch,
   type SkillNode,
 } from '@/lib/skill-tree';
+import { normalizeSkillName, SKILL_STEPS } from '@/db/skill-steps';
 
 // Les fondamentaux sont affichés en premier (base de l'arbre).
 const DISPLAY_ORDER = ['fundamental', 'beginner', 'intermediate', 'advanced', 'ultimate'] as const;
@@ -58,7 +60,7 @@ function saveCollapsedTiers(collapsed: Partial<Record<DisplayTier, boolean>>) {
 export default function SkillTreeScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
-  const { search, selectExercise } = useLocalSearchParams<{
+  const { search, selectExercise: selectExerciseParam } = useLocalSearchParams<{
     search?: string;
     selectExercise?: string;
   }>();
@@ -66,6 +68,7 @@ export default function SkillTreeScreen() {
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
   const [skillFilter, setSkillFilter] = useState<SkillFilter>(null);
   const [selectingId, setSelectingId] = useState<number | null>(null);
+  const [stepExercises, setStepExercises] = useState<Exercise[]>([]);
 
   useEffect(() => {
     void loadCollapsedTiers().then(setCollapsed);
@@ -83,7 +86,12 @@ export default function SkillTreeScreen() {
     useCallback(() => {
       void (async () => {
         try {
-          setSkills(Object.values(buildSkillTree(await getProgressions(db))).flat());
+          const [progressions, exercises] = await Promise.all([
+            getProgressions(db),
+            getExercises(db, undefined, undefined, undefined, true),
+          ]);
+          setSkills(Object.values(buildSkillTree(progressions)).flat());
+          setStepExercises(exercises);
         } catch (e) {
           console.warn('Arbre : impossible de lire les compétences', e);
         }
@@ -93,10 +101,28 @@ export default function SkillTreeScreen() {
 
   const tree = buildSkillTree(skills);
   const treeSearch = typeof search === 'string' ? search.trim() : '';
-  const selectionRequest = selectExercise === '1' ? getExerciseTreeSelection() : null;
+  const selectionRequest = selectExerciseParam === '1' ? getExerciseTreeSelection() : null;
   const isSelectionMode = selectionRequest !== null;
   const masteredCount = skills.filter((s) => s.mastered).length;
   const unlockedCount = skills.filter((s) => s.unlocked).length;
+  const stepExerciseIdByName = new Map(
+    stepExercises.map((exercise) => [normalizeSkillName(exercise.name), exercise.id]),
+  );
+
+  function selectExercise(exerciseId: number) {
+    setSelectingId(exerciseId);
+    void completeExerciseTreeSelection(exerciseId)
+      .then((completed) => {
+        if (!completed) {
+          alert('Sélection expirée', "Reviens à l'écran précédent et rouvre l'arbre.");
+          setSelectingId(null);
+        }
+      })
+      .catch(() => {
+        alert('Erreur', "Impossible de sélectionner cet exercice.");
+        setSelectingId(null);
+      });
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -187,9 +213,17 @@ export default function SkillTreeScreen() {
               : skillFilter === 'unmastered'
                 ? allNodes.filter((n) => !n.mastered)
                 : skillFilter === 'in-progress'
-                  ? allNodes.filter((n) => n.unlocked && !n.mastered)
+                  ? allNodes.filter((n) => !n.mastered && n.validationProgress > 0)
                   : allNodes;
           const matchingNodes = nodes.filter((node) => progressionMatchesSearch(node, treeSearch));
+          const selectableSteps = matchingNodes.flatMap((node) => {
+            const entry = SKILL_STEPS.find((item) => item.key === normalizeSkillName(node.name));
+            if (!entry) return [];
+            return entry.steps.flatMap((step) => {
+              const exerciseId = stepExerciseIdByName.get(normalizeSkillName(step.name));
+              return exerciseId ? [{ exerciseId, name: step.name, parent: node.name, node }] : [];
+            });
+          });
           const tierColor = TIER_COLORS[tier];
           const isCollapsed = !!collapsed[tier];
           if (matchingNodes.length === 0 && isCollapsed) return null;
@@ -215,35 +249,26 @@ export default function SkillTreeScreen() {
               {!isCollapsed &&
                 (matchingNodes.length > 0 ? (
                   <View style={styles.grid}>
-                    {matchingNodes.map((node) => (
-                      <SkillCard
-                        key={node.id}
-                        node={node}
-                        selecting={selectingId === node.id}
-                        selectionMode={isSelectionMode}
-                        onPress={() => {
-                          if (!isSelectionMode) {
-                            router.push(`/progression/${node.id}`);
-                            return;
-                          }
-                          setSelectingId(node.id);
-                          void completeExerciseTreeSelection(node.id)
-                            .then((completed) => {
-                              if (!completed) {
-                                alert(
-                                  'Sélection expirée',
-                                  "Reviens à l'écran précédent et rouvre l'arbre."
-                                );
-                                setSelectingId(null);
-                              }
-                            })
-                            .catch(() => {
-                              alert('Erreur', 'Impossible de sélectionner cet exercice.');
-                              setSelectingId(null);
-                            });
-                        }}
-                      />
-                    ))}
+                    {isSelectionMode
+                      ? selectableSteps.map((step) => (
+                          <StepSelectionCard
+                            key={step.exerciseId}
+                            name={step.name}
+                            parent={step.parent}
+                            node={step.node}
+                            selecting={selectingId === step.exerciseId}
+                            onPress={() => selectExercise(step.exerciseId)}
+                          />
+                        ))
+                      : matchingNodes.map((node) => (
+                          <SkillCard
+                            key={node.id}
+                            node={node}
+                            selecting={false}
+                            selectionMode={false}
+                            onPress={() => router.push(`/progression/${node.id}`)}
+                          />
+                        ))}
                   </View>
                 ) : (
                   <Text style={{ color: colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
@@ -337,6 +362,39 @@ function SkillCard({
       <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 4 }}>
         {node.mastered ? 'Progression validée' : node.unlocked ? 'Progression à valider' : 'Progression verrouillée'}
       </Text>
+    </Pressable>
+  );
+}
+
+function StepSelectionCard({
+  name,
+  parent,
+  node,
+  selecting,
+  onPress,
+}: {
+  name: string;
+  parent: string;
+  node: SkillNode;
+  selecting: boolean;
+  onPress: () => void;
+}) {
+  const colors = useTheme();
+  return (
+    <Pressable
+      style={[styles.card, { backgroundColor: colors.backgroundElement }, !node.unlocked && styles.locked]}
+      onPress={onPress}
+      disabled={selecting}>
+      <View style={styles.cardHeader}>
+        <Text style={{ fontSize: 18 }}>{selecting ? '…' : '＋'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.cardName, { color: node.unlocked ? colors.text : colors.textSecondary }]} numberOfLines={2}>
+            {name}
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 11 }} numberOfLines={1}>{parent}</Text>
+        </View>
+      </View>
+      <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '700' }}>Étape d’exercice</Text>
     </Pressable>
   );
 }

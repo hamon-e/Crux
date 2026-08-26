@@ -31,6 +31,7 @@ export default function ProgressionScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [validating, setValidating] = useState(false);
   const [hideMastered, setHideMastered] = useState(false);
+  const [hideValidatedSteps, setHideValidatedSteps] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -217,6 +218,9 @@ export default function ProgressionScreen() {
     if (steps.length === 0) return null;
     const validatedSteps = steps.filter((step) => step.validated === 1).length;
     const validationPercent = Math.round((validatedSteps / steps.length) * 100);
+    const visibleSteps = hideValidatedSteps
+      ? steps.filter((step) => step.validated !== 1)
+      : steps;
     return (
       <View style={{ marginTop: 12, gap: 8 }}>
         <Pressable onPress={() => setStepsOpen((o) => !o)} hitSlop={6}>
@@ -242,8 +246,22 @@ export default function ProgressionScreen() {
             />
           </View>
         </View>
+        {validatedSteps > 0 && (
+          <Pressable
+            style={[styles.filterButton, { borderColor: colors.backgroundSelected, marginTop: 0 }]}
+            onPress={() => setHideValidatedSteps((hidden) => !hidden)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: hideValidatedSteps }}>
+            <Text style={{ fontSize: 14 }}>{hideValidatedSteps ? '☑' : '☐'}</Text>
+            <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+              Masquer les exercices déjà validés
+            </Text>
+          </Pressable>
+        )}
         {stepsOpen &&
-          steps.map((step, i) => (
+          (visibleSteps.length > 0 ? visibleSteps : []).map((step) => {
+            const i = steps.findIndex((item) => item.id === step.id);
+            return (
             <Pressable
               key={step.id}
               style={[styles.stepCard, { backgroundColor: colors.backgroundSelected }]}
@@ -299,7 +317,13 @@ export default function ProgressionScreen() {
                 </View>
               )}
             </Pressable>
-          ))}
+            );
+          })}
+        {stepsOpen && visibleSteps.length === 0 && (
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            Toutes les étapes sont déjà validées.
+          </Text>
+        )}
       </View>
     );
   }
