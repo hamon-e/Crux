@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, {
@@ -46,6 +46,7 @@ export default function RoutineEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [pastDateOpen, setPastDateOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // État du drag & drop partagé entre toutes les cartes (UI thread).
   const slots = useSharedValue<Slot[]>([]);
@@ -57,7 +58,11 @@ export default function RoutineEditorScreen() {
 
   function makePan(te: Te) {
     return Gesture.Pan()
-      .activateAfterLongPress(250)
+      .minDistance(1)
+      .onBegin(() => {
+        // La poignée prend la main sur le défilement dès qu'elle est touchée.
+        runOnJS(setIsDragging)(true);
+      })
       .onStart(() => {
         const me = slots.value.find((s) => s.id === te.id);
         if (!me) return;
@@ -81,14 +86,15 @@ export default function RoutineEditorScreen() {
         }
         hoverIndex.value = Math.min(idx, Math.max(0, slots.value.length - 1));
       })
-      .onEnd(() => {
-        if (dragId.value !== te.id) return;
+      .onFinalize((_event, success) => {
+        const wasDragging = dragId.value === te.id;
         const to = hoverIndex.value;
         dragId.value = null;
         dragY.value = 0;
         hoverIndex.value = -1;
         fromIndex.value = -1;
-        if (to >= 0) runOnJS(handleDrop)(te.id, to);
+        runOnJS(setIsDragging)(false);
+        if (success && wasDragging && to >= 0) runOnJS(handleDrop)(te.id, to);
       });
   }
 
@@ -107,6 +113,12 @@ export default function RoutineEditorScreen() {
       void getTemplateDetail(db, Number(id)).then(setDetail);
     }, [db, id])
   );
+
+  // Retire les mesures des exercices supprimés ou d'une routine précédente.
+  useEffect(() => {
+    const exerciseIds = new Set(detail?.exercises.map((exercise) => exercise.id) ?? []);
+    slots.value = slots.value.filter((slot) => exerciseIds.has(slot.id));
+  }, [detail, slots]);
 
   if (!detail) return null;
 
@@ -176,6 +188,7 @@ export default function RoutineEditorScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
+        scrollEnabled={!isDragging}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
         <TextInput
@@ -362,7 +375,12 @@ function SortableExercise({
       }}>
       <View style={styles.cardHeader}>
         <GestureDetector gesture={pan}>
-          <Pressable hitSlop={12} style={styles.dragHandle}>
+          <Pressable
+            hitSlop={12}
+            style={styles.dragHandle}
+            accessibilityRole="button"
+            accessibilityLabel={`Déplacer ${te.exercise.name}`}
+            accessibilityHint="Faites glisser verticalement pour changer sa position dans la routine">
             <Text style={{ color: colors.textSecondary, fontSize: 20, fontWeight: '700' }}>☰</Text>
           </Pressable>
         </GestureDetector>
