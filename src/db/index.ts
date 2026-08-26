@@ -7,7 +7,7 @@ import { getSkillVideo } from './skill-media';
 
 export const DATABASE_NAME = 'strong.db';
 
-export const DATABASE_VERSION = 18;
+export const DATABASE_VERSION = 19;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS activity_types (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   color TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS import_exercise_mappings (
+  source_name TEXT PRIMARY KEY NOT NULL,
+  target_name TEXT NOT NULL,
+  target_muscle TEXT NOT NULL DEFAULT 'fullbody'
 );
 `);
 
@@ -549,6 +554,19 @@ WHERE is_custom = 0 AND name IN (SELECT name FROM _catalog_muscles);
       }
       await db.execAsync('DROP TABLE _catalog_muscles');
     });
+  }
+
+  if (currentDbVersion < 19) {
+    // v19 : les associations manuelles de noms Strong sont indépendantes des
+    // exercices utilisateur. Elles doivent rester disponibles après la purge
+    // des séances et peuvent ainsi recréer un exercice personnalisé supprimé.
+    await db.execAsync(`
+CREATE TABLE IF NOT EXISTS import_exercise_mappings (
+  source_name TEXT PRIMARY KEY NOT NULL,
+  target_name TEXT NOT NULL,
+  target_muscle TEXT NOT NULL DEFAULT 'fullbody'
+);
+`);
   }
 
   // v14+ : synchronisation des étapes de progression (avec images) et des

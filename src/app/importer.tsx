@@ -19,8 +19,10 @@ import { useSQLiteContext } from "expo-sqlite";
 
 import {
   getExercises,
+  getImportExerciseMappings,
   getUnmatchedImportExercises,
   importStrongWorkouts,
+  type ImportExerciseMapping,
   type ImportStats,
 } from "@/db/queries";
 import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from "@/db/types";
@@ -69,6 +71,8 @@ export default function ImportScreen() {
   const [unmatched, setUnmatched] = useState<string[]>([]);
   /** nom CSV -> id d'exercice existant (null = créer explicitement un nouvel exercice). */
   const [overrides, setOverrides] = useState<Record<string, number | null>>({});
+  /** Associations manuelles déjà sauvegardées pour les imports suivants. */
+  const [savedMappings, setSavedMappings] = useState<Record<string, ImportExerciseMapping>>({});
   /** nom CSV -> groupe musculaire choisi pour l'exercice importé/matché. */
   const [newMuscles, setNewMuscles] = useState<Record<string, Muscle>>({});
   const [musclePickName, setMusclePickName] = useState<string | null>(null);
@@ -94,8 +98,17 @@ export default function ImportScreen() {
     const names = new Set(parsed.flatMap((workout) => workout.sets.map((set) => set.exerciseName)));
     return [...names]
       .sort((a, b) => a.localeCompare(b))
-      .map((name) => ({ name, automaticTarget: matcher.find(name) }));
-  }, [exerciseList, parsed]);
+      .map((name) => {
+        const savedMapping = savedMappings[name];
+        return {
+          name,
+          savedTargetName: savedMapping?.targetName,
+          automaticTarget: savedMapping
+            ? matcher.findExact(savedMapping.targetName)
+            : matcher.find(name),
+        };
+      });
+  }, [exerciseList, parsed, savedMappings]);
 
   const visibleImportMatches = useMemo(() => {
     if (showAllMatches) return importExerciseMatches;
@@ -131,6 +144,7 @@ export default function ImportScreen() {
     setParsed(null);
     setUnmatched([]);
     setOverrides({});
+    setSavedMappings({});
     setNewMuscles({});
     setFileName(null);
     setShowAllMatches(false);
@@ -146,17 +160,19 @@ export default function ImportScreen() {
         );
         return;
       }
-      const [unmatchedNames, exercises] = await Promise.all([
+      const [unmatchedNames, exercises, mappings] = await Promise.all([
         getUnmatchedImportExercises(db, parsedWorkouts),
         // Le matching manuel doit proposer tout le catalogue, y compris les
         // exercices de force qui ont une catégorie de progression.
         getExercises(db, undefined, undefined, undefined, true),
+        getImportExerciseMappings(db),
       ]);
       setFileName(picked.name);
       setParsed(parsedWorkouts);
       setUnmatched(unmatchedNames);
       setShowAllMatches(unmatchedNames.length === 0);
       setExerciseList(exercises);
+      setSavedMappings(Object.fromEntries(mappings.map((mapping) => [mapping.sourceName, mapping])));
     } catch (e) {
       setError(`Impossible de lire ce fichier.${e instanceof Error ? ` (${e.message})` : ""}`);
     } finally {
@@ -173,6 +189,7 @@ export default function ImportScreen() {
       setParsed(null);
       setUnmatched([]);
       setOverrides({});
+      setSavedMappings({});
       setNewMuscles({});
       setFileName(null);
       setShowAllMatches(false);
@@ -287,7 +304,7 @@ export default function ImportScreen() {
                     </Text>
                   </Pressable>
                 </View>
-                {visibleImportMatches.map(({ name, automaticTarget }) => {
+                {visibleImportMatches.map(({ name, automaticTarget, savedTargetName }) => {
                   const isUnmatched = unmatched.includes(name);
                   const manuallySet = Object.prototype.hasOwnProperty.call(overrides, name);
                   const target = targetFor(name, automaticTarget);
@@ -306,8 +323,10 @@ export default function ImportScreen() {
                           numberOfLines={1}
                         >
                           {target
-                            ? `→ ${target.name}${manuallySet ? " · modifié" : ""} ›`
-                            : "Nouvel exercice ›"}
+                            ? `→ ${target.name}${manuallySet ? " · modifié" : savedTargetName ? " · mémorisé" : ""} ›`
+                            : savedTargetName
+                              ? `→ ${savedTargetName} · sera recréé ›`
+                              : "Nouvel exercice ›"}
                         </Text>
                       </Pressable>
                       {isUnmatched && (
