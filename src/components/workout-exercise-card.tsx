@@ -73,7 +73,7 @@ export function WorkoutExerciseCard({
               </>
             )}
             <Text style={[styles.colDone, { color: colors.textSecondary }]}>✓</Text>
-            <View style={styles.colDelete} />
+            {onDeleteSet && <View style={styles.colDelete} />}
           </View>
 
           {sets.map((s, i) => (
@@ -185,9 +185,10 @@ const styles = StyleSheet.create({
   colInput: {
     flex: 1,
     marginHorizontal: 4,
+    textAlign: 'center',
   },
   colDone: {
-    width: 36,
+    width: 32,
     textAlign: 'center',
     fontSize: 13,
   },
