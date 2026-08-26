@@ -4,6 +4,7 @@ import type { ImageSourcePropType } from 'react-native';
 
 import { EXERCISE_IMAGES } from '@/db/exercise-images';
 import { MOBILITY_IMAGES } from '@/db/mobility-images';
+import { CLIMBING_IMAGES } from '@/db/climbing-images';
 import { getStepImageSource } from '@/db/skill-images';
 import { SKILL_STEPS } from '@/db/skill-steps';
 import { useTheme } from '@/hooks/use-theme';
@@ -110,6 +111,7 @@ let skillImageIndex: Map<string, number | { uri: string }> | null = null;
 export function getExerciseImageSource(name: string): number | { uri: string } | undefined {
   return (
     MOBILITY_IMAGES[name] ??
+    CLIMBING_IMAGES[name] ??
     lookupSkillImage(name) ??
     EXERCISE_IMAGES[name] ??
     lookupNormalized(name)
@@ -120,7 +122,7 @@ export function getExerciseImageSource(name: string): number | { uri: string } |
 function lookupNormalized(name: string): number | undefined {
   if (!normalizedIndex) {
     normalizedIndex = new Map(
-      [...Object.entries(EXERCISE_IMAGES), ...Object.entries(MOBILITY_IMAGES)].map(
+      [...Object.entries(EXERCISE_IMAGES), ...Object.entries(MOBILITY_IMAGES), ...Object.entries(CLIMBING_IMAGES)].map(
         ([key, module]) => [normalizeKey(key), module]
       )
     );

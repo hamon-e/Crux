@@ -62,7 +62,7 @@ export interface Exercise {
   /** Catégorie / difficulté (compétences de la spreadsheet uniquement). */
   category?: string;
   difficulty?: string;
-  /** Tags séparés par des virgules : « strength », « mobility »… */
+  /** Tags séparés par des virgules : « strength », « mobility », « climbing »… */
   tags?: string;
 }
 
