@@ -26,12 +26,12 @@ import {
 const DISPLAY_ORDER = ['fundamental', 'beginner', 'intermediate', 'advanced', 'ultimate'] as const;
 
 type DisplayTier = (typeof DISPLAY_ORDER)[number];
-type SkillFilter = 'all' | 'mastered' | 'unmastered';
+type SkillFilter = 'mastered' | 'unmastered' | 'in-progress' | null;
 
 const SKILL_FILTERS: { value: SkillFilter; label: string }[] = [
-  { value: 'all', label: 'Tous' },
   { value: 'mastered', label: 'Validés' },
   { value: 'unmastered', label: 'À valider' },
+  { value: 'in-progress', label: 'En cours' },
 ];
 
 const COLLAPSED_FILE = 'arbre-collapsed.json';
@@ -64,7 +64,7 @@ export default function SkillTreeScreen() {
   }>();
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
-  const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
+  const [skillFilter, setSkillFilter] = useState<SkillFilter>(null);
   const [selectingId, setSelectingId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -162,7 +162,7 @@ export default function SkillTreeScreen() {
                     borderColor: selected ? colors.text : colors.border,
                   },
                 ]}
-                onPress={() => setSkillFilter(filter.value)}
+                onPress={() => setSkillFilter(selected ? null : filter.value)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}>
                 <Text
@@ -186,7 +186,9 @@ export default function SkillTreeScreen() {
               ? allNodes.filter((n) => n.mastered)
               : skillFilter === 'unmastered'
                 ? allNodes.filter((n) => !n.mastered)
-                : allNodes;
+                : skillFilter === 'in-progress'
+                  ? allNodes.filter((n) => n.unlocked && !n.mastered)
+                  : allNodes;
           const matchingNodes = nodes.filter((node) => progressionMatchesSearch(node, treeSearch));
           const tierColor = TIER_COLORS[tier];
           const isCollapsed = !!collapsed[tier];
@@ -249,7 +251,11 @@ export default function SkillTreeScreen() {
                       ? 'Aucune progression ne correspond dans ce niveau.'
                       : skillFilter === 'mastered'
                         ? 'Aucune progression validée ici.'
-                        : 'Tout est maîtrisé ici 🎉'}
+                        : skillFilter === 'unmastered'
+                          ? 'Aucune progression à valider ici.'
+                        : skillFilter === 'in-progress'
+                          ? 'Aucune progression en cours ici.'
+                          : 'Tout est maîtrisé ici 🎉'}
                   </Text>
                 ))}
             </View>
@@ -322,7 +328,7 @@ function SkillCard({
             styles.fill,
             {
               backgroundColor: node.mastered ? '#34c759' : tierColor,
-              width: `${Math.round(node.progress * 100)}%`,
+              width: `${Math.round(node.validationProgress * 100)}%`,
               opacity: node.unlocked ? 1 : 0.35,
             },
           ]}
