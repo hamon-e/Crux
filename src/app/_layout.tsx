@@ -3,6 +3,7 @@ import { SQLiteProvider } from 'expo-sqlite';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import '../global.css';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -19,10 +20,11 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
-        <AnimatedSplashOverlay />
-        <Stack>
+    <KeyboardProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
+          <AnimatedSplashOverlay />
+          <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="ajouter-exercice"
@@ -39,8 +41,9 @@ export default function RootLayout() {
           <Stack.Screen name="etapes/[id]" options={{ title: 'Détail de la progression' }} />
           <Stack.Screen name="export" options={{ title: 'Export' }} />
           <Stack.Screen name="importer" options={{ title: 'Importer' }} />
-        </Stack>
-      </SQLiteProvider>
-    </ThemeProvider>
+          </Stack>
+        </SQLiteProvider>
+      </ThemeProvider>
+    </KeyboardProvider>
   );
 }
