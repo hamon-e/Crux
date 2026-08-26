@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -11,6 +11,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import type { PanGesture } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { ExerciseImage } from '@/components/exercise-image';
 import { ROUTINE_COLORS } from '@/constants/routine-colors';
@@ -173,7 +174,8 @@ export default function RoutineEditorScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={16}
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -251,7 +253,7 @@ export default function RoutineEditorScreen() {
             <Text style={{ color: '#FF453A', fontWeight: '600' }}>Supprimer</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <PastDatePickerModal
         visible={pastDateOpen}

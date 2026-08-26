@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import {
   createSeanceType,
@@ -97,12 +97,12 @@ export default function AddSeanceScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag">
+      <KeyboardAwareScrollView
+        bottomOffset={16}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag">
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Type de séance</Text>
           <View style={[styles.typeList, { backgroundColor: colors.backgroundElement }]}>
             {types.map((type, i) => (
@@ -182,8 +182,7 @@ export default function AddSeanceScreen() {
             disabled={saving}>
             <Text style={styles.primaryButtonText}>Ajouter la séance</Text>
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       <Modal visible={createOpen} animationType="slide" transparent onRequestClose={() => setCreateOpen(false)}>
         <KeyboardAvoidingView

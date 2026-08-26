@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
@@ -214,7 +213,7 @@ export default function SessionScreen() {
   // ---- Séance en cours ----
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <View style={styles.header}>
           <TextInput
             style={[styles.nameInput, { color: colors.text }]}
@@ -238,6 +237,9 @@ export default function SessionScreen() {
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          renderScrollComponent={(props) => (
+            <KeyboardAwareScrollView {...props} bottomOffset={16} />
+          )}
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 40 }}>
               Ajoute ton premier exercice pour commencer.
@@ -282,7 +284,7 @@ export default function SessionScreen() {
             <Text style={styles.primaryButtonText}>Terminer</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <Modal visible={finishOpen} transparent animationType="fade" onRequestClose={() => setFinishOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setFinishOpen(false)}>
