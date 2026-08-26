@@ -248,7 +248,7 @@ function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) 
             styles.fill,
             {
               backgroundColor: node.mastered ? '#34c759' : tierColor,
-              width: `${Math.round(node.progress * 100)}%`,
+              width: `${Math.round(node.validationProgress * 100)}%`,
               opacity: node.unlocked ? 1 : 0.35,
             },
           ]}
