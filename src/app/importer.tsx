@@ -25,6 +25,7 @@ import {
 } from "@/db/queries";
 import { MUSCLES, MUSCLE_LABELS, type Exercise, type Muscle } from "@/db/types";
 import { createExerciseMatcher } from "@/lib/exercise-matching";
+import { beginExerciseTreeSelection } from "@/lib/exercise-tree-selection";
 import { parseStrongCsv, type ParsedWorkout } from "@/lib/strong-csv";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -188,9 +189,7 @@ export default function ImportScreen() {
     setMappingName(name);
   }
 
-  function chooseExercise(id: number | null) {
-    if (!mappingName) return;
-    const name = mappingName;
+  function chooseExerciseFor(name: string, id: number | null) {
     setOverrides((prev) => {
       const next = { ...prev };
       next[name] = id;
@@ -208,10 +207,28 @@ export default function ImportScreen() {
     if (id === null) setMusclePickName(name);
   }
 
+  function chooseExercise(id: number | null) {
+    if (!mappingName) return;
+    chooseExerciseFor(mappingName, id);
+  }
+
   function searchInSkillTree() {
     const query = search.trim() || mappingName?.trim();
-    if (!query) return;
-    router.push({ pathname: "/(tabs)/arbre", params: { search: query } });
+    const name = mappingName;
+    if (!query || !name) return;
+
+    beginExerciseTreeSelection({
+      title: `Associer « ${name} »`,
+      onSelect: (exerciseId) => {
+        chooseExerciseFor(name, exerciseId);
+        router.dismissTo("/importer");
+      },
+    });
+    setMappingName(null);
+    router.push({
+      pathname: "/(tabs)/arbre",
+      params: { search: query, selectExercise: "1" },
+    });
   }
 
   return (

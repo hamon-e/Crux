@@ -8,6 +8,11 @@ import { File, Paths } from 'expo-file-system';
 import { getProgressions } from '@/db/queries';
 import { getStepImageSource } from '@/db/skill-images';
 import { useTheme } from '@/hooks/use-theme';
+import { alert } from '@/lib/alert';
+import {
+  completeExerciseTreeSelection,
+  getExerciseTreeSelection,
+} from '@/lib/exercise-tree-selection';
 import {
   TIER_COLORS,
   TIER_ICONS,
@@ -53,10 +58,14 @@ function saveCollapsedTiers(collapsed: Partial<Record<DisplayTier, boolean>>) {
 export default function SkillTreeScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
-  const { search } = useLocalSearchParams<{ search?: string }>();
+  const { search, selectExercise } = useLocalSearchParams<{
+    search?: string;
+    selectExercise?: string;
+  }>();
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
   const [skillFilter, setSkillFilter] = useState<SkillFilter>(null);
+  const [selectingId, setSelectingId] = useState<number | null>(null);
 
   useEffect(() => {
     void loadCollapsedTiers().then(setCollapsed);
@@ -84,6 +93,8 @@ export default function SkillTreeScreen() {
 
   const tree = buildSkillTree(skills);
   const treeSearch = typeof search === 'string' ? search.trim() : '';
+  const selectionRequest = selectExercise === '1' ? getExerciseTreeSelection() : null;
+  const isSelectionMode = selectionRequest !== null;
   const masteredCount = skills.filter((s) => s.mastered).length;
   const unlockedCount = skills.filter((s) => s.unlocked).length;
 
@@ -94,6 +105,26 @@ export default function SkillTreeScreen() {
         <Text style={{ color: colors.textSecondary }}>
           {masteredCount}/{skills.length} maîtrisées · {unlockedCount} débloquées
         </Text>
+
+        {isSelectionMode && (
+          <View
+            style={[
+              styles.selectionNotice,
+              { backgroundColor: colors.backgroundElement, borderColor: '#007AFF' },
+            ]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontWeight: '800' }}>
+                {selectionRequest.title}
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                Touche une carte pour sélectionner cet exercice.
+              </Text>
+            </View>
+            <Pressable onPress={() => router.back()} accessibilityRole="button">
+              <Text style={{ color: '#007AFF', fontWeight: '700' }}>Annuler</Text>
+            </Pressable>
+          </View>
+        )}
 
         {treeSearch && (
           <View
@@ -188,7 +219,29 @@ export default function SkillTreeScreen() {
                       <SkillCard
                         key={node.id}
                         node={node}
-                        onPress={() => router.push(`/progression/${node.id}`)}
+                        selecting={selectingId === node.id}
+                        selectionMode={isSelectionMode}
+                        onPress={() => {
+                          if (!isSelectionMode) {
+                            router.push(`/progression/${node.id}`);
+                            return;
+                          }
+                          setSelectingId(node.id);
+                          void completeExerciseTreeSelection(node.id)
+                            .then((completed) => {
+                              if (!completed) {
+                                alert(
+                                  'Sélection expirée',
+                                  "Reviens à l'écran précédent et rouvre l'arbre."
+                                );
+                                setSelectingId(null);
+                              }
+                            })
+                            .catch(() => {
+                              alert('Erreur', 'Impossible de sélectionner cet exercice.');
+                              setSelectingId(null);
+                            });
+                        }}
                       />
                     ))}
                   </View>
@@ -215,7 +268,17 @@ export default function SkillTreeScreen() {
   );
 }
 
-function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) {
+function SkillCard({
+  node,
+  onPress,
+  selectionMode,
+  selecting,
+}: {
+  node: SkillNode;
+  onPress: () => void;
+  selectionMode: boolean;
+  selecting: boolean;
+}) {
   const colors = useTheme();
   const tierColor = TIER_COLORS[node.tier];
 
@@ -226,7 +289,8 @@ function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) 
           { backgroundColor: colors.backgroundElement },
           !node.unlocked && styles.locked,
         ]}
-        onPress={onPress}>
+        onPress={onPress}
+        disabled={selecting}>
         <View style={styles.cardHeader}>
           {(() => {
             const src = getStepImageSource(node.cover_image ?? null);
@@ -246,7 +310,17 @@ function SkillCard({ node, onPress }: { node: SkillNode; onPress: () => void }) 
             numberOfLines={2}>
             {node.name}
           </Text>
-          <Text style={styles.statusIcon}>{node.mastered ? '✅' : node.unlocked ? '🔓' : '🔒'}</Text>
+          <Text style={styles.statusIcon}>
+            {selectionMode
+              ? selecting
+                ? '…'
+                : '＋'
+              : node.mastered
+                ? '✅'
+                : node.unlocked
+                  ? '🔓'
+                  : '🔒'}
+          </Text>
         </View>
       <View style={[styles.track, { backgroundColor: colors.backgroundSelected }]}>
         <View
@@ -312,6 +386,15 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  selectionNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1.5,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
