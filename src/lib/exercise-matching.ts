@@ -2,7 +2,6 @@ export interface ExerciseRef {
   id: number;
   name: string;
 }
-
 /** Alias (formes normalisées) : noms courants de l'app Strong -> noms de la base. */
 const ALIASES: Record<string, string> = {
   'knee raise captain s chair': 'knee hip raise on parallel bars',
@@ -89,6 +88,10 @@ export function createExerciseMatcher<T extends ExerciseRef>(exercises: T[]) {
 
   return {
     find: resolve,
+    /** Retrouve uniquement une correspondance exacte après normalisation. */
+    findExact(name: string): T | null {
+      return byNormalized.get(normalizeExerciseName(name)) ?? null;
+    },
     /** Enregistre un exercice créé pendant l'import pour les prochains matchs. */
     add: index,
   };

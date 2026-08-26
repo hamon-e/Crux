@@ -44,7 +44,6 @@ export async function getExercises(
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   return db.getAllAsync<Exercise>(`SELECT * FROM exercises ${where} ORDER BY name`, params);
 }
-
 export async function createExercise(
   db: SQLiteDatabase,
   name: string,
@@ -1250,6 +1249,27 @@ DELETE FROM exercises WHERE is_custom = 1;
 
 // ---------- Import Strong ----------
 
+/** Association mémorisée entre un nom Strong et un exercice de l'application. */
+export interface ImportExerciseMapping {
+  sourceName: string;
+  targetName: string;
+  targetMuscle: string;
+}
+
+/**
+ * Les mappings sont volontairement dans une table séparée des données de
+ * l'utilisateur : « Supprimer mes données » ne les efface pas.
+ */
+export async function getImportExerciseMappings(
+  db: SQLiteDatabase,
+): Promise<ImportExerciseMapping[]> {
+  return db.getAllAsync<ImportExerciseMapping>(
+    `SELECT source_name AS sourceName, target_name AS targetName, target_muscle AS targetMuscle
+     FROM import_exercise_mappings
+     ORDER BY source_name`,
+  );
+}
+
 export interface ImportStats {
   imported: number;
   skipped: number;
@@ -1266,15 +1286,20 @@ export async function getUnmatchedImportExercises(
   db: SQLiteDatabase,
   workouts: { sets: { exerciseName: string }[] }[],
 ): Promise<string[]> {
-  const matcher = createExerciseMatcher(
-    await db.getAllAsync<{ id: number; name: string }>(
+  const [exercises, mappings] = await Promise.all([
+    db.getAllAsync<{ id: number; name: string }>(
       "SELECT id, name FROM exercises ORDER BY name",
     ),
-  );
+    getImportExerciseMappings(db),
+  ]);
+  const matcher = createExerciseMatcher(exercises);
+  const mappedNames = new Set(mappings.map((mapping) => mapping.sourceName));
   const names = new Set<string>();
   for (const w of workouts) {
     for (const s of w.sets) {
-      if (!matcher.find(s.exerciseName)) names.add(s.exerciseName);
+      if (!mappedNames.has(s.exerciseName) && !matcher.find(s.exerciseName)) {
+        names.add(s.exerciseName);
+      }
     }
   }
   return [...names].sort((a, b) => a.localeCompare(b));
@@ -1372,10 +1397,16 @@ export async function importStrongWorkouts(
   );
 
   // Matching des noms d'exercices du CSV avec les exercices existants
-  const matcher = createExerciseMatcher(
-    await db.getAllAsync<{ id: number; name: string }>(
+  const [existingExercises, savedMappings] = await Promise.all([
+    db.getAllAsync<{ id: number; name: string; muscle: string }>(
       "SELECT id, name FROM exercises ORDER BY name",
     ),
+    getImportExerciseMappings(db),
+  ]);
+  const matcher = createExerciseMatcher(existingExercises);
+  const exerciseById = new Map(existingExercises.map((exercise) => [exercise.id, exercise]));
+  const savedMappingBySource = new Map(
+    savedMappings.map((mapping) => [mapping.sourceName, mapping]),
   );
 
   // Résolution nom CSV -> id d'exercice, mémorisée pour construire les routines
@@ -1400,6 +1431,23 @@ export async function importStrongWorkouts(
   const execImport = async (
     txn: Pick<SQLiteDatabase, "runAsync" | "getFirstAsync" | "getAllAsync">,
   ) => {
+    // On mémorise uniquement les choix explicites. Un matching automatique ne
+    // doit pas devenir une règle permanente pour de futurs CSV.
+    for (const [sourceName, targetId] of Object.entries(exerciseOverrides)) {
+      const target = targetId === null ? null : exerciseById.get(targetId);
+      if (targetId !== null && !target) continue;
+      await txn.runAsync(
+        `INSERT INTO import_exercise_mappings (source_name, target_name, target_muscle)
+         VALUES (?, ?, ?)
+         ON CONFLICT(source_name) DO UPDATE SET
+           target_name = excluded.target_name,
+           target_muscle = excluded.target_muscle`,
+        sourceName,
+        target?.name ?? sourceName,
+        newExerciseMuscles[sourceName] ?? target?.muscle ?? "fullbody",
+      );
+    }
+
     for (const w of workouts) {
       if (existing.has(w.startedAt)) {
         stats.skipped++;
@@ -1418,7 +1466,7 @@ export async function importStrongWorkouts(
       const workoutId = result.lastInsertRowId;
 
       for (const s of w.sets) {
-        let ex: { id: number; name: string } | null;
+        let ex: { id: number; name: string; muscle: string } | null;
         const hasOverride = Object.prototype.hasOwnProperty.call(exerciseOverrides, s.exerciseName);
         const overrideId = exerciseOverrides[s.exerciseName];
         if (hasOverride && overrideId !== null) {
@@ -1432,9 +1480,35 @@ export async function importStrongWorkouts(
             );
             updatedOverrideMuscles.add(muscleUpdateKey);
           }
-          ex = { id: overrideId, name: s.exerciseName };
+          ex = {
+            id: overrideId,
+            name: s.exerciseName,
+            muscle: selectedMuscle ?? exerciseById.get(overrideId)?.muscle ?? "fullbody",
+          };
         } else if (!hasOverride) {
-          ex = matcher.find(s.exerciseName);
+          const savedMapping = savedMappingBySource.get(s.exerciseName);
+          if (savedMapping) {
+            // Une cible personnalisée peut avoir été supprimée avec les
+            // données. Le mapping reste alors utilisable et la recrée.
+            ex = matcher.findExact(savedMapping.targetName);
+            if (!ex) {
+              const result = await txn.runAsync(
+                "INSERT INTO exercises (name, muscle, equipment, is_custom) VALUES (?, ?, ?, 1)",
+                savedMapping.targetName,
+                savedMapping.targetMuscle,
+                "other",
+              );
+              ex = {
+                id: result.lastInsertRowId,
+                name: savedMapping.targetName,
+                muscle: savedMapping.targetMuscle,
+              };
+              matcher.add(ex);
+              stats.exercisesCreated++;
+            }
+          } else {
+            ex = matcher.find(s.exerciseName);
+          }
         } else {
           ex = null;
         }
@@ -1445,7 +1519,11 @@ export async function importStrongWorkouts(
             newExerciseMuscles[s.exerciseName] ?? "fullbody",
             "other",
           );
-          ex = { id: result.lastInsertRowId, name: s.exerciseName };
+          ex = {
+            id: result.lastInsertRowId,
+            name: s.exerciseName,
+            muscle: newExerciseMuscles[s.exerciseName] ?? "fullbody",
+          };
           matcher.add(ex);
           stats.exercisesCreated++;
         }

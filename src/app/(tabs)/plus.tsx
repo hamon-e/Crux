@@ -90,7 +90,7 @@ export default function MoreScreen() {
   function handleDeleteAll() {
     confirm(
       'Supprimer mes données',
-      "Tes séances, séries, routines, types de séance et exercices personnels seront définitivement supprimés. Les exercices intégrés à l'app seront conservés. Cette action est irréversible.",
+      "Tes séances, séries, routines, types de séance et exercices personnels seront définitivement supprimés. Les exercices intégrés à l'app et tes associations manuelles d'import seront conservés. Cette action est irréversible.",
       [
         { text: 'Annuler', style: 'cancel' },
         {
