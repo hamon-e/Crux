@@ -117,6 +117,8 @@ export interface Progression {
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
+  /** Part des étapes de la progression qui ont été validées, entre 0 et 1. */
+  validationProgress: number;
 }
 
 /**
@@ -163,7 +165,20 @@ export async function getProgressions(db: SQLiteDatabase): Promise<Progression[]
             (SELECT COUNT(DISTINCT s.workout_id) FROM sets s JOIN workouts w ON w.id = s.workout_id
              WHERE s.exercise_id = e.id AND w.completed = 1 AND s.done = 1) AS sessions,
             (SELECT es.image FROM exercise_steps es WHERE es.exercise_id = e.id
-             AND COALESCE(es.image, '') != '' ORDER BY es.step_order LIMIT 1) AS cover_image
+             AND COALESCE(es.image, '') != '' ORDER BY es.step_order LIMIT 1) AS cover_image,
+            CASE
+              WHEN (SELECT COUNT(*) FROM exercise_steps es WHERE es.exercise_id = e.id) > 0
+              THEN CAST((SELECT COUNT(*) FROM exercise_step_progress esp
+                         WHERE esp.exercise_id = e.id) AS REAL)
+                   / (SELECT COUNT(*) FROM exercise_steps es WHERE es.exercise_id = e.id)
+              ELSE CASE
+                WHEN (SELECT COUNT(DISTINCT s.workout_id)
+                      FROM sets s JOIN workouts w ON w.id = s.workout_id
+                      WHERE s.exercise_id = e.id AND w.completed = 1 AND s.done = 1) > 0
+                THEN 1.0
+                ELSE 0.0
+              END
+            END AS validationProgress
      FROM exercises e
      WHERE COALESCE(e.category, '') != ''
      ORDER BY e.name`,
@@ -251,7 +266,13 @@ export async function getExerciseSteps(
   );
 }
 
-/** Bascule la validation d’une étape indépendamment du skill complet. */
+/**
+ * Bascule la validation d’une étape.
+ *
+ * Une étape validée implique que toutes les étapes précédentes le sont aussi.
+ * La cascade est faite dans la même transaction pour éviter une progression
+ * partiellement validée si l’opération est interrompue.
+ */
 export async function toggleExerciseStepValidation(
   db: SQLiteDatabase,
   exerciseId: number,
@@ -266,10 +287,13 @@ export async function toggleExerciseStepValidation(
 
     if (result.changes === 0) {
       await db.runAsync(
-        'INSERT INTO exercise_step_progress (exercise_id, step_order, validated_at) VALUES (?, ?, ?)',
+        `INSERT OR IGNORE INTO exercise_step_progress (exercise_id, step_order, validated_at)
+         SELECT exercise_id, step_order, ?
+         FROM exercise_steps
+         WHERE exercise_id = ? AND step_order <= ?`,
+        Date.now(),
         exerciseId,
         stepOrder,
-        Date.now(),
       );
     }
   });

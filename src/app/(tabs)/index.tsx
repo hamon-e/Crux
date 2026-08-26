@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
@@ -100,6 +99,7 @@ export default function SessionScreen() {
       if (chronoStart.current !== null) chronoBase.current += Date.now() - chronoStart.current;
       chronoStart.current = null;
       stopChronoInterval();
+      setChronoMs(chronoBase.current);
       setChronoRunning(false);
     } else {
       chronoStart.current = Date.now();
@@ -213,7 +213,7 @@ export default function SessionScreen() {
   // ---- Séance en cours ----
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <View style={styles.header}>
           <TextInput
             style={[styles.nameInput, { color: colors.text }]}
@@ -237,6 +237,9 @@ export default function SessionScreen() {
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          renderScrollComponent={(props) => (
+            <KeyboardAwareScrollView {...props} bottomOffset={16} />
+          )}
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 40 }}>
               Ajoute ton premier exercice pour commencer.
@@ -257,40 +260,18 @@ export default function SessionScreen() {
         />
 
         <View style={styles.chronoBar}>
-          <View style={styles.chronoTopRow}>
-            <View style={styles.chronoTitleRow}>
-              <View style={styles.chronoIcon}>
-                <Text style={styles.chronoIconText}>⏱</Text>
-              </View>
-              <View>
-                <Text style={styles.chronoLabel}>Chronomètre</Text>
-                <Text style={styles.chronoStatus}>
-                  {chronoRunning ? 'En cours' : chronoMs > 0 ? 'En pause' : 'Prêt à lancer'}
-                </Text>
-              </View>
+          <View style={styles.chronoTitleRow}>
+            <View style={styles.chronoIcon}>
+              <Text style={styles.chronoIconText}>⏱</Text>
             </View>
-            <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
+            <Text style={styles.chronoLabel} numberOfLines={1}>Chronomètre</Text>
           </View>
-
-          <View style={styles.chronoActions}>
-            <Pressable
-              style={({ pressed }) => [styles.chronoButton, pressed && styles.chronoButtonPressed]}
-              onPress={toggleChrono}>
-              <Text style={styles.chronoButtonText}>
-                {chronoRunning ? 'Pause' : chronoMs > 0 ? 'Reprendre' : 'Démarrer'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.chronoResetButton,
-                chronoMs === 0 && !chronoRunning && styles.chronoResetButtonDisabled,
-                pressed && chronoMs > 0 && styles.chronoResetButtonPressed,
-              ]}
-              onPress={resetChrono}
-              disabled={chronoMs === 0 && !chronoRunning}>
-              <Text style={styles.chronoResetText}>Réinitialiser</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.chronoButton, pressed && styles.chronoButtonPressed]}
+            onPress={toggleChrono}>
+            <Text style={styles.chronoButtonText}>{chronoRunning ? 'Stop' : 'Start'}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.footer}>
@@ -303,7 +284,7 @@ export default function SessionScreen() {
             <Text style={styles.primaryButtonText}>Terminer</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <Modal visible={finishOpen} transparent animationType="fade" onRequestClose={() => setFinishOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setFinishOpen(false)}>
@@ -390,65 +371,52 @@ const styles = StyleSheet.create({
   chronoBar: {
     marginHorizontal: 16,
     marginBottom: 4,
-    padding: 16,
-    gap: 16,
-    borderRadius: 22,
-    backgroundColor: '#FFD60A',
-    shadowColor: '#9A7600',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  chronoTopRow: {
+    padding: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
+    borderRadius: 16,
+    backgroundColor: '#FFD60A',
+    shadowColor: '#9A7600',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
   chronoTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    flex: 1,
+    gap: 6,
   },
   chronoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFF3A6',
   },
   chronoIconText: {
-    fontSize: 21,
+    fontSize: 16,
   },
   chronoLabel: {
     color: '#1C1C1E',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
-  },
-  chronoStatus: {
-    color: '#5C4B00',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
   },
   chronoTime: {
     color: '#1C1C1E',
-    fontSize: 32,
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: -0.5,
+    letterSpacing: -0.25,
     fontVariant: ['tabular-nums'],
   },
-  chronoActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   chronoButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 13,
-    paddingHorizontal: 16,
+    minHeight: 36,
+    minWidth: 58,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1C1C1E',
@@ -460,26 +428,6 @@ const styles = StyleSheet.create({
   },
   chronoButtonPressed: {
     opacity: 0.78,
-  },
-  chronoResetButton: {
-    minHeight: 44,
-    borderRadius: 13,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#1C1C1E55',
-  },
-  chronoResetButtonDisabled: {
-    opacity: 0.4,
-  },
-  chronoResetButtonPressed: {
-    backgroundColor: '#FFFFFF33',
-  },
-  chronoResetText: {
-    color: '#1C1C1E',
-    fontWeight: '700',
-    fontSize: 14,
   },
   footer: {
     flexDirection: 'row',
