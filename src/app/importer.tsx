@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useSQLiteContext } from "expo-sqlite";
@@ -207,6 +208,12 @@ export default function ImportScreen() {
     if (id === null) setMusclePickName(name);
   }
 
+  function searchInSkillTree() {
+    const query = search.trim() || mappingName?.trim();
+    if (!query) return;
+    router.push({ pathname: "/(tabs)/arbre", params: { search: query } });
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -344,17 +351,28 @@ export default function ImportScreen() {
               <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
                 Associer « {mappingName} »
               </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { color: colors.text, borderColor: colors.backgroundSelected, marginBottom: 10 },
-                ]}
-                placeholder="Rechercher un exercice…"
-                placeholderTextColor={colors.textSecondary}
-                value={search}
-                onChangeText={setSearch}
-                autoCorrect={false}
-              />
+              <View style={styles.searchRow}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.searchInput,
+                    { color: colors.text, borderColor: colors.backgroundSelected },
+                  ]}
+                  placeholder="Rechercher un exercice…"
+                  placeholderTextColor={colors.textSecondary}
+                  value={search}
+                  onChangeText={setSearch}
+                  autoCorrect={false}
+                />
+                <Pressable
+                  style={[styles.treeButton, { borderColor: colors.backgroundSelected }]}
+                  onPress={searchInSkillTree}
+                  accessibilityRole="button"
+                  accessibilityLabel="Rechercher dans l'arbre de progression"
+                >
+                  <Text style={{ color: "#007AFF", fontWeight: "700" }}>Arbre</Text>
+                </Pressable>
+              </View>
               <FlatList
                 style={{ maxHeight: 380 }}
                 data={filteredExercises}
@@ -442,6 +460,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 15,
+  },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  searchInput: { flex: 1 },
+  treeButton: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   matchRow: {
     flexDirection: "row",

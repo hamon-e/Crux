@@ -113,16 +113,16 @@ export interface Progression {
   category: string;
   difficulty: string;
   /** Nombre d'occurrences distinctes dans l'historique avec au moins une série validée.
-   * Les progressions déduites de leurs étapes ont au minimum la valeur 1. */
+   * Les progressions déduites de leur dernière étape ont au minimum la valeur 1. */
   sessions: number;
   /** Image de couverture (première étape ayant une image). */
   cover_image?: string | null;
 }
 
 /**
- * Déduit les progressions acquises depuis les exercices réalisés. Une étape de
- * progression valide uniquement sa progression parente. Un exercice portant
- * exactement le nom d'une progression valide cette progression.
+ * Déduit les progressions acquises depuis les exercices réalisés. Seule la
+ * dernière étape valide sa progression parente. Un exercice portant exactement
+ * le nom d'une progression continue de valider directement cette progression.
  */
 function getProgressionsCompletedFromHistory(
   progressions: Pick<Progression, "id" | "name">[],
@@ -131,14 +131,14 @@ function getProgressionsCompletedFromHistory(
   const progressionByKey = new Map(
     progressions.map((progression) => [normalizeSkillName(progression.name), progression]),
   );
-  const parentsByStepKey = new Map<string, Set<string>>();
+  const parentsByLastStepKey = new Map<string, Set<string>>();
   for (const entry of SKILL_STEPS) {
-    for (const step of entry.steps) {
-      const stepKey = normalizeSkillName(step.name);
-      const parents = parentsByStepKey.get(stepKey) ?? new Set<string>();
-      parents.add(entry.key);
-      parentsByStepKey.set(stepKey, parents);
-    }
+    const lastStep = entry.steps.at(-1);
+    if (!lastStep) continue;
+    const stepKey = normalizeSkillName(lastStep.name);
+    const parents = parentsByLastStepKey.get(stepKey) ?? new Set<string>();
+    parents.add(entry.key);
+    parentsByLastStepKey.set(stepKey, parents);
   }
 
   const completed = new Set<number>();
@@ -146,7 +146,7 @@ function getProgressionsCompletedFromHistory(
     const key = normalizeSkillName(name);
     const directProgression = progressionByKey.get(key);
     if (directProgression) completed.add(directProgression.id);
-    for (const parentKey of parentsByStepKey.get(key) ?? []) {
+    for (const parentKey of parentsByLastStepKey.get(key) ?? []) {
       const parent = progressionByKey.get(parentKey);
       if (parent) completed.add(parent.id);
     }
@@ -1256,6 +1256,59 @@ export async function getUnmatchedImportExercises(
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Rejoue l'historique terminé dans le suivi des étapes : une étape réalisée
+ * valide cette étape et toutes celles qui la précèdent dans chaque progression
+ * correspondante. Les validations manuelles déjà présentes sont conservées.
+ */
+async function syncExerciseStepProgressFromHistory(
+  db: Pick<SQLiteDatabase, "runAsync" | "getAllAsync">,
+) {
+  const [progressions, historicalExercises] = await Promise.all([
+    db.getAllAsync<{ id: number; name: string }>(
+      "SELECT id, name FROM exercises WHERE COALESCE(category, '') != ''",
+    ),
+    db.getAllAsync<{ name: string; completed_at: number }>(
+      `SELECT e.name, MAX(COALESCE(w.ended_at, w.started_at, 0)) AS completed_at
+       FROM exercises e
+       JOIN sets s ON s.exercise_id = e.id
+       JOIN workouts w ON w.id = s.workout_id
+       WHERE w.completed = 1 AND s.done = 1
+       GROUP BY e.id, e.name`,
+    ),
+  ]);
+
+  const progressionIdByKey = new Map(
+    progressions.map((progression) => [normalizeSkillName(progression.name), progression.id]),
+  );
+  const historicalCompletionByKey = new Map(
+    historicalExercises.map((exercise) => [
+      normalizeSkillName(exercise.name),
+      exercise.completed_at || Date.now(),
+    ]),
+  );
+
+  for (const entry of SKILL_STEPS) {
+    const progressionId = progressionIdByKey.get(entry.key);
+    if (!progressionId) continue;
+
+    for (const [stepOrder, step] of entry.steps.entries()) {
+      const validatedAt = historicalCompletionByKey.get(normalizeSkillName(step.name));
+      if (validatedAt === undefined) continue;
+
+      for (let precedingOrder = 0; precedingOrder <= stepOrder; precedingOrder++) {
+        await db.runAsync(
+          `INSERT OR IGNORE INTO exercise_step_progress
+             (exercise_id, step_order, validated_at) VALUES (?, ?, ?)`,
+          progressionId,
+          precedingOrder,
+          validatedAt,
+        );
+      }
+    }
+  }
+}
+
 /** Importe des séances parsées depuis un export CSV de l'app Strong (dédoublonne par date de début). */
 export async function importStrongWorkouts(
   db: SQLiteDatabase,
@@ -1401,6 +1454,7 @@ export async function importStrongWorkouts(
       stats.imported++;
     }
 
+    await syncExerciseStepProgressFromHistory(txn);
     await createRoutinesFromImports(txn, importedByName, resolvedByName, stats);
   };
 

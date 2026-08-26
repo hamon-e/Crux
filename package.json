@@ -1,7 +1,8 @@
 {
   "name": "test_app",
   "main": "expo-router/entry",
-  "version": "1.6.0",
+  "version": "1.7.0",
+  "packageManager": "pnpm@10.15.1",
   "dependencies": {
     "@expo/ui": "~57.0.12",
     "@expo/vector-icons": "^15.0.2",
@@ -47,8 +48,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "format": "prettier --write .",
