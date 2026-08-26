@@ -75,10 +75,10 @@ export default function WorkoutDetailScreen() {
             android_ripple={{ color: colors.border }}>
             <View style={styles.exerciseHeader}>
               <ExerciseImage name={group.exercise.name} muscle={group.exercise.muscle} width={56} radius={6} />
-              <Text style={[styles.exerciseName, styles.exerciseHeaderText, { color: colors.text }]}>
-                {group.exercise.name}
-                {group.side ? ` — ${SIDE_LABELS[group.side]}` : ''}
-              </Text>
+              <View style={styles.exerciseHeaderText}>
+                <Text style={[styles.exerciseName, { color: colors.text }]}>{group.exercise.name}</Text>
+                {group.side && <SideTag side={group.side} />}
+              </View>
             </View>
             {group.sets
               .filter((s) => s.done)
@@ -103,6 +103,14 @@ export default function WorkoutDetailScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SideTag({ side }: { side: keyof typeof SIDE_LABELS }) {
+  return (
+    <View style={styles.sideTag}>
+      <Text style={styles.sideTagText}>{SIDE_LABELS[side]}</Text>
+    </View>
   );
 }
 
@@ -135,6 +143,8 @@ const styles = StyleSheet.create({
   exerciseHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   exerciseHeaderText: { flex: 1 },
   exerciseName: { fontSize: 16, fontWeight: '700' },
+  sideTag: { alignSelf: 'flex-start', backgroundColor: '#007AFF22', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
+  sideTagText: { color: '#007AFF', fontSize: 11, fontWeight: '800' },
   setLine: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 32 },
   button: {

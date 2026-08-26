@@ -467,8 +467,6 @@ export async function startWorkout(
         "SELECT * FROM template_exercises WHERE template_id = ? ORDER BY order_index",
         templateId,
       );
-      // 2 exos identiques à la suite = côté droit puis côté gauche.
-      assignConsecutiveSides(tExercises);
       const result = await db.runAsync(
         `INSERT INTO workouts (name, date, started_at, completed, template_id, color)
            VALUES (?, ?, ?, 0, ?, ?)`,
@@ -1045,7 +1043,7 @@ export async function addTemplateExercise(
 export type TemplateExerciseUpdates = Partial<
   Pick<
     TemplateExercise,
-    "target_sets" | "target_reps" | "target_weight" | "set_type" | "target_seconds"
+    "target_sets" | "target_reps" | "target_weight" | "set_type" | "target_seconds" | "side"
   >
 >;
 
@@ -1055,10 +1053,10 @@ export async function updateTemplateExercise(
   updates: TemplateExerciseUpdates,
 ) {
   const fields: string[] = [];
-  const params: (string | number)[] = [];
+  const params: (string | number | null)[] = [];
   for (const [key, value] of Object.entries(updates)) {
     fields.push(`${key} = ?`);
-    params.push(value as number);
+    params.push(value as string | number | null);
   }
   if (!fields.length) return;
   params.push(templateExerciseId);

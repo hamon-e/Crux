@@ -44,9 +44,12 @@ export function WorkoutExerciseCard({
         <View style={[styles.headerText, { marginLeft: 10 }]}>
           <Text style={[styles.exerciseName, { color: colors.text }]} numberOfLines={2}>
             {exercise.name}
-            {side ? ' — ' : ''}
-            {side ? SIDE_LABELS[side] : ''}
           </Text>
+          {side && (
+            <View style={styles.sideTag}>
+              <Text style={styles.sideTagText}>{SIDE_LABELS[side]}</Text>
+            </View>
+          )}
           <Text style={{ color: colors.textSecondary }}>
             {previousTop
               ? `Précédent : ${previousTop.weight} kg × ${previousTop.reps}`
@@ -167,6 +170,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  sideTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#007AFF22',
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  sideTagText: { color: '#007AFF', fontSize: 11, fontWeight: '800' },
   setRowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
