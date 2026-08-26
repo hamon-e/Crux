@@ -1213,8 +1213,9 @@ export async function getExerciseHistory(db: SQLiteDatabase, exerciseId: number)
   return [...merged.values()];
 }
 
-export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
+export async function getPersonalRecords(db: SQLiteDatabase, days?: number, tag?: string) {
   const periodFilter = days ? `AND w.date >= date('now', '-${days} days')` : "";
+  const tagFilter = tag ? "AND (',' || COALESCE(e.tags, '') || ',') LIKE ?" : "";
   return db.getAllAsync<{
     exercise_id: number;
     name: string;
@@ -1239,8 +1240,9 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
              ORDER BY s2.weight DESC, s2.reps DESC LIMIT 1) AS date
      FROM sets s JOIN exercises e ON e.id = s.exercise_id
      JOIN workouts w ON w.id = s.workout_id
-     WHERE w.completed = 1 AND s.done = 1 ${periodFilter}
+     WHERE w.completed = 1 AND s.done = 1 ${periodFilter} ${tagFilter}
      GROUP BY s.exercise_id ORDER BY top_weight DESC, best_set_reps DESC`,
+    ...(tag ? [`%,${tag},%`] : []),
   );
 }
 
