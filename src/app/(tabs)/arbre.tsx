@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { File, Paths } from 'expo-file-system';
 
@@ -13,6 +13,7 @@ import {
   TIER_ICONS,
   TIER_LABELS,
   buildSkillTree,
+  progressionMatchesSearch,
   type SkillNode,
 } from '@/lib/skill-tree';
 
@@ -52,6 +53,7 @@ function saveCollapsedTiers(collapsed: Partial<Record<DisplayTier, boolean>>) {
 export default function SkillTreeScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
+  const { search } = useLocalSearchParams<{ search?: string }>();
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
   const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
@@ -81,6 +83,7 @@ export default function SkillTreeScreen() {
   );
 
   const tree = buildSkillTree(skills);
+  const treeSearch = typeof search === 'string' ? search.trim() : '';
   const masteredCount = skills.filter((s) => s.mastered).length;
   const unlockedCount = skills.filter((s) => s.unlocked).length;
 
@@ -91,6 +94,26 @@ export default function SkillTreeScreen() {
         <Text style={{ color: colors.textSecondary }}>
           {masteredCount}/{skills.length} maîtrisées · {unlockedCount} débloquées
         </Text>
+
+        {treeSearch && (
+          <View
+            style={[
+              styles.searchNotice,
+              { backgroundColor: colors.backgroundElement, borderColor: colors.border },
+            ]}
+          >
+            <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
+              Résultats pour « {treeSearch} »
+            </Text>
+            <Pressable
+              onPress={() => router.setParams({ search: undefined })}
+              accessibilityRole="button"
+              accessibilityLabel="Effacer la recherche dans l'arbre"
+            >
+              <Text style={{ color: '#007AFF', fontWeight: '700' }}>Effacer</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View
           style={[styles.filterControl, { backgroundColor: colors.backgroundElement, borderColor: colors.border }]}
@@ -133,9 +156,10 @@ export default function SkillTreeScreen() {
               : skillFilter === 'unmastered'
                 ? allNodes.filter((n) => !n.mastered)
                 : allNodes;
+          const matchingNodes = nodes.filter((node) => progressionMatchesSearch(node, treeSearch));
           const tierColor = TIER_COLORS[tier];
           const isCollapsed = !!collapsed[tier];
-          if (nodes.length === 0 && isCollapsed) return null;
+          if (matchingNodes.length === 0 && isCollapsed) return null;
           return (
             <View key={tier}>
               {sectionIdx > 0 && (
@@ -156,9 +180,9 @@ export default function SkillTreeScreen() {
                 </Text>
               </Pressable>
               {!isCollapsed &&
-                (nodes.length > 0 ? (
+                (matchingNodes.length > 0 ? (
                   <View style={styles.grid}>
-                    {nodes.map((node) => (
+                    {matchingNodes.map((node) => (
                       <SkillCard
                         key={node.id}
                         node={node}
@@ -168,7 +192,11 @@ export default function SkillTreeScreen() {
                   </View>
                 ) : (
                   <Text style={{ color: colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
-                    {skillFilter === 'mastered' ? 'Aucune progression validée ici.' : 'Tout est maîtrisé ici 🎉'}
+                    {treeSearch
+                      ? 'Aucune progression ne correspond dans ce niveau.'
+                      : skillFilter === 'mastered'
+                        ? 'Aucune progression validée ici.'
+                        : 'Tout est maîtrisé ici 🎉'}
                   </Text>
                 ))}
             </View>
@@ -271,6 +299,15 @@ const styles = StyleSheet.create({
   },
   filterOptionTextSelected: {
     fontWeight: '700',
+  },
+  searchNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   grid: {
     flexDirection: 'row',

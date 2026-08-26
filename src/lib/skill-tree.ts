@@ -1,4 +1,5 @@
 import type { Progression } from '@/db/queries';
+import { normalizeSkillName, SKILL_STEPS } from '@/db/skill-steps';
 
 export const TIERS = ['fundamental', 'beginner', 'intermediate', 'advanced', 'ultimate'] as const;
 export type Tier = (typeof TIERS)[number];
@@ -35,6 +36,24 @@ export interface SkillNode extends Progression {
   progress: number;
   mastered: boolean;
   unlocked: boolean;
+}
+
+/** Correspondance par nom de progression ou par nom d'une de ses étapes. */
+export function progressionMatchesSearch(
+  progression: Pick<Progression, 'name'>,
+  search: string,
+): boolean {
+  const query = normalizeSkillName(search);
+  if (!query) return true;
+
+  const progressionKey = normalizeSkillName(progression.name);
+  if (progressionKey.includes(query)) return true;
+
+  return (
+    SKILL_STEPS.find((entry) => entry.key === progressionKey)?.steps.some((step) =>
+      normalizeSkillName(step.name).includes(query),
+    ) ?? false
+  );
 }
 
 export function tierOf(difficulty: string): Tier {
