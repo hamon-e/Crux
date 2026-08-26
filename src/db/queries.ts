@@ -251,7 +251,13 @@ export async function getExerciseSteps(
   );
 }
 
-/** Bascule la validation d’une étape indépendamment du skill complet. */
+/**
+ * Bascule la validation d’une étape.
+ *
+ * Une étape validée implique que toutes les étapes précédentes le sont aussi.
+ * La cascade est faite dans la même transaction pour éviter une progression
+ * partiellement validée si l’opération est interrompue.
+ */
 export async function toggleExerciseStepValidation(
   db: SQLiteDatabase,
   exerciseId: number,
@@ -266,10 +272,13 @@ export async function toggleExerciseStepValidation(
 
     if (result.changes === 0) {
       await db.runAsync(
-        'INSERT INTO exercise_step_progress (exercise_id, step_order, validated_at) VALUES (?, ?, ?)',
+        `INSERT OR IGNORE INTO exercise_step_progress (exercise_id, step_order, validated_at)
+         SELECT exercise_id, step_order, ?
+         FROM exercise_steps
+         WHERE exercise_id = ? AND step_order <= ?`,
+        Date.now(),
         exerciseId,
         stepOrder,
-        Date.now(),
       );
     }
   });
