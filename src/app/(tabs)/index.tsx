@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
-  FlatList,
+  BackHandler,
   Modal,
   Pressable,
   ScrollView,
@@ -102,11 +102,13 @@ export default function SessionScreen() {
       setChronoMs(chronoBase.current);
       setChronoRunning(false);
     } else {
+      // « Start » démarre toujours un nouveau chronomètre, même après un stop.
+      chronoBase.current = 0;
       chronoStart.current = Date.now();
       chronoTimer.current = setInterval(() => {
         setChronoMs(chronoBase.current + (chronoStart.current !== null ? Date.now() - chronoStart.current : 0));
       }, 200);
-      setChronoMs(chronoBase.current);
+      setChronoMs(0);
       setChronoRunning(true);
     }
   }, [chronoRunning, stopChronoInterval]);
@@ -151,7 +153,7 @@ export default function SessionScreen() {
     router.push(`/historique/${workout.id}`);
   }
 
-  async function handleDiscard() {
+  const handleDiscard = useCallback(async () => {
     if (!workout) return;
     confirm('Abandonner', 'Supprimer cette séance en cours ?', [
       { text: 'Annuler', style: 'cancel' },
@@ -165,7 +167,18 @@ export default function SessionScreen() {
         },
       },
     ]);
-  }
+  }, [db, reload, resetChrono, workout]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!workout) return;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        void handleDiscard();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [handleDiscard, workout])
+  );
 
   async function handleUpdateSet(setId: number, updates: SetUpdates & Record<string, unknown>) {
     await updateSet(db, setId, updates as SetUpdates);
@@ -230,23 +243,21 @@ export default function SessionScreen() {
           </View>
         </View>
 
-        <FlatList
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          data={workout.exercises}
-          keyExtractor={(item) => `${item.exercise.id}|${item.side ?? ''}`}
           contentContainerStyle={styles.listContent}
+          bottomOffset={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          renderScrollComponent={(props) => (
-            <KeyboardAwareScrollView {...props} bottomOffset={16} />
-          )}
-          ListEmptyComponent={
+          >
+          {workout.exercises.length === 0 && (
             <Text style={{ textAlign: 'center', color: colors.textSecondary, marginTop: 40 }}>
               Ajoute ton premier exercice pour commencer.
             </Text>
-          }
-          renderItem={({ item }) => (
+          )}
+          {workout.exercises.map((item) => (
             <WorkoutExerciseCard
+              key={`${item.exercise.id}|${item.side ?? ''}`}
               exercise={item.exercise}
               sets={item.sets}
               side={item.side}
@@ -256,8 +267,8 @@ export default function SessionScreen() {
               }}
               onUpdateSet={(setId, updates) => handleUpdateSet(setId, updates)}
             />
-          )}
-        />
+          ))}
+        </KeyboardAwareScrollView>
 
         <View style={styles.chronoBar}>
           <View style={styles.chronoTitleRow}>
