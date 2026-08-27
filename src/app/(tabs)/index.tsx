@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
@@ -244,11 +245,10 @@ export default function SessionScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.listContent}
-          automaticallyAdjustKeyboardInsets
-          canCancelContentTouches
+          bottomOffset={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
@@ -270,7 +270,7 @@ export default function SessionScreen() {
               onUpdateSet={(setId, updates) => handleUpdateSet(setId, updates)}
             />
           ))}
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         {chronoVisible ? (
           <View style={styles.chronoBar}>
