@@ -330,6 +330,14 @@ export default function SessionScreen() {
         animationType="slide"
         onRequestClose={() => setChronoExpanded(false)}>
         <SafeAreaView style={styles.chronoExpandedScreen}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remettre le chronomètre en bas"
+            hitSlop={8}
+            style={({ pressed }) => [styles.chronoExpandedIcon, pressed && styles.chronoIconPressed]}
+            onPress={() => setChronoExpanded(false)}>
+            <Text style={styles.chronoIconText}>⏱</Text>
+          </Pressable>
           <View style={styles.chronoExpandedContent}>
             <Text style={styles.chronoExpandedLabel}>Chronomètre</Text>
             <Text accessibilityLiveRegion="polite" style={styles.chronoExpandedTime}>
@@ -535,6 +543,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 24,
+  },
+  chronoExpandedIcon: {
+    alignSelf: 'flex-end',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3A6',
   },
   chronoExpandedLabel: {
     color: '#1C1C1E',
