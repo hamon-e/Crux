@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
   chronoToggleDock: {
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     marginHorizontal: 16,
     marginBottom: 4,
   },
