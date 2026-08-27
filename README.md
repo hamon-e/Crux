@@ -40,6 +40,26 @@ pnpm android
 pnpm web
 ```
 
+## Release Android (APK)
+
+Chaque tag Git déclenche le workflow GitHub Actions `Android release APK`. Il génère le projet Android avec Expo Prebuild, construit un APK de release signé, puis l’ajoute à la GitHub Release associée au tag. Aucun service EAS n’est utilisé.
+
+Avant le premier tag, créer les secrets suivants dans **Settings → Environments → main → Environment secrets** :
+
+- `ANDROID_KEYSTORE_BASE64` : contenu Base64 du fichier de keystore de release (`base64 -i release.keystore | tr -d '\n'` sur macOS) ;
+- `ANDROID_KEYSTORE_PASSWORD` ;
+- `ANDROID_KEY_ALIAS` ;
+- `ANDROID_KEY_PASSWORD`.
+
+Puis pousser un tag, par exemple :
+
+```bash
+git tag v2.0.1
+git push origin v2.0.1
+```
+
+L’APK est disponible dans la GitHub Release et dans les artefacts du workflow.
+
 ## Commandes utiles
 
 ```bash
