@@ -91,6 +91,14 @@ export default function WorkoutDetailScreen() {
           </Pressable>
         ))}
 
+        {detail.template_id ? (
+          <Pressable
+            style={[styles.routineButton, { borderColor: '#007AFF' }]}
+            onPress={() => router.push(`/routines/${detail.template_id}`)}>
+            <Text style={styles.routineButtonText}>Modifier la routine associée</Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.actions}>
           <Pressable style={[styles.button, { backgroundColor: '#007AFF' }]} onPress={handleDuplicate}>
             <Text style={styles.buttonText}>Dupliquer</Text>
@@ -147,6 +155,14 @@ const styles = StyleSheet.create({
   sideTagText: { color: '#007AFF', fontSize: 11, fontWeight: '800' },
   setLine: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
   actions: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 32 },
+  routineButton: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  routineButtonText: { color: '#007AFF', fontWeight: '700' },
   button: {
     flex: 1,
     borderRadius: 12,
