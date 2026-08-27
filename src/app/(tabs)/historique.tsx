@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
 import { WorkoutHeatmap, HEATMAP_CARD_WIDTH, type DayInfo } from '@/components/workout-heatmap';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 
 type WorkoutRow = Awaited<ReturnType<typeof getWorkouts>>[number];
 type WeekDays = Awaited<ReturnType<typeof getCurrentWeekDailyVolume>>;
@@ -130,9 +131,17 @@ export default function HistoryScreen() {
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}
             onPress={() => router.push(`/historique/${item.id}`)}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>
-                {item.name || 'Séance'}
-              </Text>
+              <View style={styles.workoutTitle}>
+                <View
+                  style={[
+                    styles.routineDot,
+                    { backgroundColor: item.color || ROUTINE_COLORS[0] },
+                  ]}
+                />
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16, flexShrink: 1 }}>
+                  {item.name || 'Séance'}
+                </Text>
+              </View>
               <Text style={{ color: colors.textSecondary }}>{formatDate(item.date)}</Text>
               <Text style={{ color: colors.textSecondary }}>
                 {item.set_count > 0
@@ -189,5 +198,15 @@ const styles = StyleSheet.create({
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  workoutTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  routineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });
