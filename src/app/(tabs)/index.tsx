@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useKeepAwake } from 'expo-keep-awake';
 
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
@@ -46,6 +47,11 @@ function formatElapsed(ms: number) {
 
 const SEANCE_TYPES = ['Grimpe bloc', 'Grimpe voie', 'Vélo', 'Course', 'Natation', 'Randonnée'];
 
+function ActiveWorkoutKeepAwake() {
+  useKeepAwake('active-workout');
+  return null;
+}
+
 export default function SessionScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
@@ -57,6 +63,7 @@ export default function SessionScreen() {
   const [chronoRunning, setChronoRunning] = useState(false);
   const [chronoMs, setChronoMs] = useState(0);
   const [chronoVisible, setChronoVisible] = useState(true);
+  const [chronoExpanded, setChronoExpanded] = useState(false);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const chronoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const chronoStart = useRef<number | null>(null);
@@ -229,6 +236,7 @@ export default function SessionScreen() {
   // ---- Séance en cours ----
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ActiveWorkoutKeepAwake />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoidingView}>
@@ -288,9 +296,15 @@ export default function SessionScreen() {
                 style={({ pressed }) => [styles.chronoIcon, pressed && styles.chronoIconPressed]}>
                 <Text style={styles.chronoIconText}>⏱</Text>
               </Pressable>
-              <Text style={styles.chronoLabel} numberOfLines={1}>Chronomètre</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Agrandir le chronomètre"
+                onPress={() => setChronoExpanded(true)}
+                style={({ pressed }) => [styles.chronoSummary, pressed && styles.chronoSummaryPressed]}>
+                <Text style={styles.chronoLabel} numberOfLines={1}>Chronomètre</Text>
+                <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
+              </Pressable>
             </View>
-            <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
             <Pressable
               style={({ pressed }) => [styles.chronoButton, pressed && styles.chronoButtonPressed]}
               onPress={toggleChrono}>
@@ -321,6 +335,41 @@ export default function SessionScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={chronoExpanded}
+        animationType="slide"
+        onRequestClose={() => setChronoExpanded(false)}>
+        <SafeAreaView style={styles.chronoExpandedScreen}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remettre le chronomètre en bas"
+            hitSlop={8}
+            style={({ pressed }) => [styles.chronoExpandedIcon, pressed && styles.chronoIconPressed]}
+            onPress={() => setChronoExpanded(false)}>
+            <Text style={styles.chronoIconText}>⏱</Text>
+          </Pressable>
+          <View style={styles.chronoExpandedContent}>
+            <Text style={styles.chronoExpandedLabel}>Chronomètre</Text>
+            <Text accessibilityLiveRegion="polite" style={styles.chronoExpandedTime}>
+              {formatElapsed(chronoMs)}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.chronoExpandedStartButton, pressed && styles.chronoButtonPressed]}
+              onPress={toggleChrono}>
+              <Text style={styles.chronoExpandedStartText}>{chronoRunning ? 'Stop' : 'Start'}</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remettre le chronomètre en bas"
+            style={({ pressed }) => [styles.chronoCollapseButton, pressed && styles.chronoCollapseButtonPressed]}
+            onPress={() => setChronoExpanded(false)}>
+            <Text style={styles.chronoCollapseButtonText}>Remettre en bas</Text>
+          </Pressable>
+        </SafeAreaView>
+      </Modal>
 
       <Modal visible={finishOpen} transparent animationType="fade" onRequestClose={() => setFinishOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setFinishOpen(false)}>
@@ -428,6 +477,16 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 6,
   },
+  chronoSummary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  chronoSummaryPressed: {
+    opacity: 0.7,
+  },
   chronoIcon: {
     width: 28,
     height: 28,
@@ -487,6 +546,69 @@ const styles = StyleSheet.create({
   },
   chronoButtonPressed: {
     opacity: 0.78,
+  },
+  chronoExpandedScreen: {
+    flex: 1,
+    backgroundColor: '#FFD60A',
+    padding: 24,
+  },
+  chronoExpandedContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  chronoExpandedIcon: {
+    alignSelf: 'flex-end',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF3A6',
+  },
+  chronoExpandedLabel: {
+    color: '#1C1C1E',
+    fontSize: 20,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  chronoExpandedTime: {
+    color: '#1C1C1E',
+    fontSize: 72,
+    fontWeight: '900',
+    letterSpacing: -2,
+    fontVariant: ['tabular-nums'],
+  },
+  chronoExpandedStartButton: {
+    minWidth: 150,
+    borderRadius: 16,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1C1C1E',
+  },
+  chronoExpandedStartText: {
+    color: '#FFD60A',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  chronoCollapseButton: {
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1C1C1E',
+    borderRadius: 14,
+    paddingVertical: 15,
+  },
+  chronoCollapseButtonPressed: {
+    backgroundColor: '#E8C000',
+  },
+  chronoCollapseButtonText: {
+    color: '#1C1C1E',
+    fontSize: 16,
+    fontWeight: '800',
   },
   footer: {
     flexDirection: 'row',

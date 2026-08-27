@@ -72,6 +72,19 @@ export async function getDefaultExercises(db: SQLiteDatabase): Promise<Exercise[
   );
 }
 
+/** Exercices standard pouvant recevoir l'historique d'un exercice du catalogue. */
+export async function getExerciseMatchTargets(
+  db: SQLiteDatabase,
+  sourceExerciseId: number,
+): Promise<Exercise[]> {
+  return db.getAllAsync<Exercise>(
+    `SELECT * FROM exercises
+     WHERE id != ? AND COALESCE(category, '') = ''
+     ORDER BY name`,
+    sourceExerciseId,
+  );
+}
+
 /**
  * Remplace définitivement un exercice personnalisé par un exercice du catalogue.
  * Les séries et les références dans les routines sont conservées sous l'exercice cible.
@@ -99,6 +112,38 @@ export async function matchCustomExerciseToDefault(
       customExerciseId,
     );
     await db.runAsync('DELETE FROM exercises WHERE id = ?', customExerciseId);
+  });
+}
+
+/**
+ * Réassocie l'historique et les routines d'un exercice du catalogue à un
+ * autre exercice de la base. À l'inverse de l'association custom → catalogue,
+ * l'exercice livré avec l'app reste disponible dans le catalogue.
+ */
+export async function matchDefaultExerciseToExercise(
+  db: SQLiteDatabase,
+  defaultExerciseId: number,
+  targetExerciseId: number,
+) {
+  if (defaultExerciseId === targetExerciseId) {
+    throw new Error('Les deux exercices doivent être différents.');
+  }
+
+  await db.withTransactionAsync(async () => {
+    const source = await getExerciseById(db, defaultExerciseId);
+    const target = await getExerciseById(db, targetExerciseId);
+    if (!source || source.is_custom || source.category || !target || target.category) {
+      throw new Error('Association d’exercices invalide.');
+    }
+
+    // Toutes les statistiques sont calculées depuis `sets` : réaffecter les
+    // séries transfère donc aussi l'historique, les records et les volumes.
+    await db.runAsync('UPDATE sets SET exercise_id = ? WHERE exercise_id = ?', targetExerciseId, defaultExerciseId);
+    await db.runAsync(
+      'UPDATE template_exercises SET exercise_id = ? WHERE exercise_id = ?',
+      targetExerciseId,
+      defaultExerciseId,
+    );
   });
 }
 
