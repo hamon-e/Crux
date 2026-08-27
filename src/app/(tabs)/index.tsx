@@ -54,6 +54,7 @@ export default function SessionScreen() {
   const [finishOpen, setFinishOpen] = useState(false);
   const [chronoRunning, setChronoRunning] = useState(false);
   const [chronoMs, setChronoMs] = useState(0);
+  const [chronoVisible, setChronoVisible] = useState(true);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const chronoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const chronoStart = useRef<number | null>(null);
@@ -270,20 +271,39 @@ export default function SessionScreen() {
           ))}
         </KeyboardAwareScrollView>
 
-        <View style={styles.chronoBar}>
-          <View style={styles.chronoTitleRow}>
-            <View style={styles.chronoIcon}>
-              <Text style={styles.chronoIconText}>⏱</Text>
+        {chronoVisible ? (
+          <View style={styles.chronoBar}>
+            <View style={styles.chronoTitleRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Masquer le chronomètre"
+                accessibilityState={{ expanded: true }}
+                hitSlop={8}
+                onPress={() => setChronoVisible(false)}
+                style={({ pressed }) => [styles.chronoIcon, pressed && styles.chronoIconPressed]}>
+                <Text style={styles.chronoIconText}>⏱</Text>
+              </Pressable>
+              <Text style={styles.chronoLabel} numberOfLines={1}>Chronomètre</Text>
             </View>
-            <Text style={styles.chronoLabel} numberOfLines={1}>Chronomètre</Text>
+            <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.chronoButton, pressed && styles.chronoButtonPressed]}
+              onPress={toggleChrono}>
+              <Text style={styles.chronoButtonText}>{chronoRunning ? 'Stop' : 'Start'}</Text>
+            </Pressable>
           </View>
-          <Text style={styles.chronoTime}>{formatElapsed(chronoMs)}</Text>
-          <Pressable
-            style={({ pressed }) => [styles.chronoButton, pressed && styles.chronoButtonPressed]}
-            onPress={toggleChrono}>
-            <Text style={styles.chronoButtonText}>{chronoRunning ? 'Stop' : 'Start'}</Text>
-          </Pressable>
-        </View>
+        ) : (
+          <View style={styles.chronoToggleDock}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Afficher le chronomètre"
+              accessibilityState={{ expanded: false }}
+              onPress={() => setChronoVisible(true)}
+              style={({ pressed }) => [styles.chronoIcon, styles.chronoToggle, pressed && styles.chronoIconPressed]}>
+              <Text style={styles.chronoIconText}>⏱</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.footer}>
           <Pressable
@@ -410,6 +430,26 @@ const styles = StyleSheet.create({
   },
   chronoIconText: {
     fontSize: 16,
+  },
+  chronoIconPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.94 }],
+  },
+  chronoToggleDock: {
+    alignItems: 'flex-end',
+    marginHorizontal: 16,
+    marginBottom: 4,
+  },
+  chronoToggle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFD60A',
+    shadowColor: '#9A7600',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
   chronoLabel: {
     color: '#1C1C1E',
