@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useKeepAwake } from 'expo-keep-awake';
 
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
@@ -43,6 +44,11 @@ function formatElapsed(ms: number) {
 }
 
 const SEANCE_TYPES = ['Grimpe bloc', 'Grimpe voie', 'Vélo', 'Course', 'Natation', 'Randonnée'];
+
+function ActiveWorkoutKeepAwake() {
+  useKeepAwake('active-workout');
+  return null;
+}
 
 export default function SessionScreen() {
   const db = useSQLiteContext();
@@ -227,6 +233,7 @@ export default function SessionScreen() {
   // ---- Séance en cours ----
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ActiveWorkoutKeepAwake />
       <View style={{ flex: 1 }}>
         <View style={styles.header}>
           <TextInput
