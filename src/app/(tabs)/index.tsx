@@ -232,6 +232,7 @@ export default function SessionScreen() {
             style={[styles.nameInput, { color: colors.text }]}
             placeholder="Nom de la séance"
             placeholderTextColor={colors.textSecondary}
+            rejectResponderTermination={false}
             defaultValue={workout.name}
             onEndEditing={(e) => updateWorkoutName(db, workout.id, e.nativeEvent.text)}
           />

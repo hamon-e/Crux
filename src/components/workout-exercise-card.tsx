@@ -90,6 +90,7 @@ export function WorkoutExerciseCard({
                     { color: colors.text, borderColor: colors.backgroundSelected },
                   ]}
                   keyboardType="number-pad"
+                  rejectResponderTermination={false}
                   defaultValue={String(s.duration ?? 0)}
                   onEndEditing={(e) => {
                     const v = parseInt(e.nativeEvent.text, 10);
@@ -105,6 +106,7 @@ export function WorkoutExerciseCard({
                       { color: colors.text, borderColor: colors.backgroundSelected },
                     ]}
                     keyboardType="decimal-pad"
+                    rejectResponderTermination={false}
                     defaultValue={String(s.weight)}
                     onEndEditing={(e) => {
                       const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
@@ -118,6 +120,7 @@ export function WorkoutExerciseCard({
                       { color: colors.text, borderColor: colors.backgroundSelected },
                     ]}
                     keyboardType="number-pad"
+                    rejectResponderTermination={false}
                     defaultValue={String(s.reps)}
                     onEndEditing={(e) => {
                       const v = parseInt(e.nativeEvent.text, 10);
