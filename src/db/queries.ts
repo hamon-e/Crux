@@ -195,6 +195,46 @@ function getProgressionsCompletedFromHistory(
   return completed;
 }
 
+/** Marque les étapes de toute progression acquise par une séance terminée.
+ * Une progression est acquise par son propre exercice ou par sa dernière étape. */
+async function validateProgressionsFromExerciseNames(
+  db: SQLiteDatabase,
+  historicalExerciseNames: Iterable<string>,
+) {
+  const progressions = await db.getAllAsync<ProgressionReference>(
+    "SELECT id, name FROM exercises WHERE COALESCE(category, '') != ''",
+  );
+  const progressionByKey = new Map(
+    progressions.map((progression) => [normalizeSkillName(progression.name), progression.id]),
+  );
+  const parentsByLastStepKey = new Map<string, Set<number>>();
+  for (const entry of SKILL_STEPS) {
+    const lastStep = entry.steps.at(-1);
+    const progressionId = progressionByKey.get(entry.key);
+    if (!lastStep || !progressionId) continue;
+    const key = normalizeSkillName(lastStep.name);
+    const parents = parentsByLastStepKey.get(key) ?? new Set<number>();
+    parents.add(progressionId);
+    parentsByLastStepKey.set(key, parents);
+  }
+
+  const completedIds = new Set<number>();
+  for (const name of historicalExerciseNames) {
+    const key = normalizeSkillName(name);
+    const directId = progressionByKey.get(key);
+    if (directId) completedIds.add(directId);
+    for (const parentId of parentsByLastStepKey.get(key) ?? []) completedIds.add(parentId);
+  }
+  for (const progressionId of completedIds) {
+    await db.runAsync(
+      `INSERT OR IGNORE INTO exercise_step_progress (exercise_id, step_order, validated_at)
+       SELECT exercise_id, step_order, ? FROM exercise_steps WHERE exercise_id = ?`,
+      Date.now(),
+      progressionId,
+    );
+  }
+}
+
 export async function getProgressions(db: SQLiteDatabase): Promise<Progression[]> {
   const progressions = await db.getAllAsync<Progression>(
     `SELECT e.id, e.name, e.muscle,
@@ -273,6 +313,10 @@ export async function validateProgressionsManually(
         workoutId,
         progressionId,
       );
+      // Une validation de progression implique explicitement toutes ses étapes.
+      await validateProgressionsFromExerciseNames(db, [
+        (await getExerciseById(db, progressionId))?.name ?? "",
+      ]);
     }
   });
   return workoutIds;
@@ -423,8 +467,6 @@ export async function startWorkout(
         "SELECT * FROM template_exercises WHERE template_id = ? ORDER BY order_index",
         templateId,
       );
-      // 2 exos identiques à la suite = côté droit puis côté gauche.
-      assignConsecutiveSides(tExercises);
       const result = await db.runAsync(
         `INSERT INTO workouts (name, date, started_at, completed, template_id, color)
            VALUES (?, ?, ?, 0, ?, ?)`,
@@ -641,12 +683,23 @@ export async function finishWorkout(
   notes?: string,
   endedAt?: number,
 ) {
-  await db.runAsync(
-    "UPDATE workouts SET completed = 1, ended_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
-    endedAt ?? Date.now(),
-    notes ?? null,
-    workoutId,
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE workouts SET completed = 1, ended_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
+      endedAt ?? Date.now(),
+      notes ?? null,
+      workoutId,
+    );
+    const completedExercises = await db.getAllAsync<{ name: string }>(
+      `SELECT e.name FROM sets s JOIN exercises e ON e.id = s.exercise_id
+       WHERE s.workout_id = ? AND s.done = 1`,
+      workoutId,
+    );
+    await validateProgressionsFromExerciseNames(
+      db,
+      completedExercises.map((exercise) => exercise.name),
+    );
+  });
 }
 
 export async function updateWorkoutName(db: SQLiteDatabase, workoutId: number, name: string) {
@@ -990,7 +1043,7 @@ export async function addTemplateExercise(
 export type TemplateExerciseUpdates = Partial<
   Pick<
     TemplateExercise,
-    "target_sets" | "target_reps" | "target_weight" | "set_type" | "target_seconds"
+    "target_sets" | "target_reps" | "target_weight" | "set_type" | "target_seconds" | "side"
   >
 >;
 
@@ -1000,10 +1053,10 @@ export async function updateTemplateExercise(
   updates: TemplateExerciseUpdates,
 ) {
   const fields: string[] = [];
-  const params: (string | number)[] = [];
+  const params: (string | number | null)[] = [];
   for (const [key, value] of Object.entries(updates)) {
     fields.push(`${key} = ?`);
-    params.push(value as number);
+    params.push(value as string | number | null);
   }
   if (!fields.length) return;
   params.push(templateExerciseId);
@@ -1158,8 +1211,9 @@ export async function getExerciseHistory(db: SQLiteDatabase, exerciseId: number)
   return [...merged.values()];
 }
 
-export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
+export async function getPersonalRecords(db: SQLiteDatabase, days?: number, tag?: string) {
   const periodFilter = days ? `AND w.date >= date('now', '-${days} days')` : "";
+  const tagFilter = tag ? "AND (',' || COALESCE(e.tags, '') || ',') LIKE ?" : "";
   return db.getAllAsync<{
     exercise_id: number;
     name: string;
@@ -1184,8 +1238,9 @@ export async function getPersonalRecords(db: SQLiteDatabase, days?: number) {
              ORDER BY s2.weight DESC, s2.reps DESC LIMIT 1) AS date
      FROM sets s JOIN exercises e ON e.id = s.exercise_id
      JOIN workouts w ON w.id = s.workout_id
-     WHERE w.completed = 1 AND s.done = 1 ${periodFilter}
+     WHERE w.completed = 1 AND s.done = 1 ${periodFilter} ${tagFilter}
      GROUP BY s.exercise_id ORDER BY top_weight DESC, best_set_reps DESC`,
+    ...(tag ? [`%,${tag},%`] : []),
   );
 }
 

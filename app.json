@@ -2,7 +2,7 @@
   "expo": {
     "name": "test_app",
     "slug": "test_app",
-    "version": "1.10.0",
+    "version": "1.10.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "testapp",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.anonymous.test_app",
-      "versionCode": 3,
+      "versionCode": 5,
       "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -43,6 +43,14 @@
         {
           "color": "#208AEF",
           "defaultChannel": "reminders"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "buildArchs": ["arm64-v8a"]
+          }
         }
       ]
     ],

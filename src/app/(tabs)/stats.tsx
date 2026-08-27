@@ -40,6 +40,13 @@ const PERIODS: { label: string; days?: number }[] = [
   { label: 'Tout' },
 ];
 
+const RECORD_CATEGORIES = [
+  { value: undefined, label: 'Tous' },
+  { value: 'strength', label: 'Force' },
+  { value: 'mobility', label: 'Mobilité' },
+  { value: 'climbing', label: 'Escalade' },
+] as const;
+
 export default function StatsScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
@@ -47,15 +54,16 @@ export default function StatsScreen() {
   const [prs, setPrs] = useState<PRs>([]);
   const [muscles, setMuscles] = useState<Muscle>([]);
   const [period, setPeriod] = useState(PERIODS[0]);
+  const [recordCategory, setRecordCategory] = useState<string | undefined>(undefined);
 
   useFocusEffect(
     useCallback(() => {
       void (async () => {
         setTotals(await getTotalStats(db));
-        setPrs(await getPersonalRecords(db, period.days));
+        setPrs(await getPersonalRecords(db, period.days, recordCategory));
         setMuscles(await getMuscleVolume(db, 30));
       })();
-    }, [db, period])
+    }, [db, period, recordCategory])
   );
 
   const maxMuscleSets = Math.max(1, ...muscles.map((m) => m.set_count));
@@ -123,6 +131,26 @@ export default function StatsScreen() {
                 ]}>
                 <Text style={{ color: active ? '#fff' : colors.textSecondary, fontWeight: '600', fontSize: 12 }}>
                   {p.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.periodRow} accessibilityRole="radiogroup" accessibilityLabel="Catégorie des records">
+          {RECORD_CATEGORIES.map((category) => {
+            const active = recordCategory === category.value;
+            return (
+              <Pressable
+                key={category.label}
+                onPress={() => setRecordCategory(category.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={[
+                  styles.periodPill,
+                  { backgroundColor: active ? '#007AFF' : colors.backgroundElement },
+                ]}>
+                <Text style={{ color: active ? '#fff' : colors.textSecondary, fontWeight: '600', fontSize: 12 }}>
+                  {category.label}
                 </Text>
               </Pressable>
             );

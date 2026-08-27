@@ -1,14 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
-import type { SharedValue } from 'react-native-reanimated';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import type { PanGesture } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -36,90 +28,19 @@ import { confirm } from '@/lib/alert';
 type Detail = NonNullable<Awaited<ReturnType<typeof getTemplateDetail>>>;
 type Te = TemplateExercise & { exercise: Exercise; sets: TemplateSet[] };
 
-const CARD_GAP = 12;
-
-type Slot = { id: number; y: number; h: number };
-type SlotSV = SharedValue<Slot[]>;
-
 export default function RoutineEditorScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [pastDateOpen, setPastDateOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // État du drag & drop partagé entre toutes les cartes (UI thread).
-  const slots = useSharedValue<Slot[]>([]);
-  const dragId = useSharedValue<number | null>(null);
-  const fromIndex = useSharedValue(-1);
-  const hoverIndex = useSharedValue(-1);
-  const dragY = useSharedValue(0);
-  const dragH = useSharedValue(0);
-
-  function makePan(te: Te) {
-    return Gesture.Pan()
-      .minDistance(1)
-      .onBegin(() => {
-        // La poignée prend la main sur le défilement dès qu'elle est touchée.
-        runOnJS(setIsDragging)(true);
-      })
-      .onStart(() => {
-        const me = slots.value.find((s) => s.id === te.id);
-        if (!me) return;
-        dragId.value = te.id;
-        dragH.value = me.h;
-        dragY.value = 0;
-        const idx = slots.value.findIndex((s) => s.id === te.id);
-        fromIndex.value = idx;
-        hoverIndex.value = idx;
-      })
-      .onUpdate((e) => {
-        if (dragId.value !== te.id) return;
-        dragY.value = e.translationY;
-        const me = slots.value.find((s) => s.id === te.id);
-        if (!me) return;
-        const center = me.y + me.h / 2 + e.translationY;
-        let idx = 0;
-        for (const s of slots.value) {
-          if (s.id === te.id) continue;
-          if (s.y + s.h / 2 < center) idx++;
-        }
-        hoverIndex.value = Math.min(idx, Math.max(0, slots.value.length - 1));
-      })
-      .onFinalize((_event, success) => {
-        const wasDragging = dragId.value === te.id;
-        const to = hoverIndex.value;
-        dragId.value = null;
-        dragY.value = 0;
-        hoverIndex.value = -1;
-        fromIndex.value = -1;
-        runOnJS(setIsDragging)(false);
-        if (success && wasDragging && to >= 0) runOnJS(handleDrop)(te.id, to);
-      });
-  }
-
-  function handleSlotLayout(slotId: number, y: number, h: number) {
-    const next = [...slots.value];
-    const i = next.findIndex((s) => s.id === slotId);
-    const entry = { id: slotId, y, h };
-    if (i >= 0) next[i] = entry;
-    else next.push(entry);
-    next.sort((a, b) => a.y - b.y);
-    slots.value = next;
-  }
+  const [isReordering, setIsReordering] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       void getTemplateDetail(db, Number(id)).then(setDetail);
     }, [db, id])
   );
-
-  // Retire les mesures des exercices supprimés ou d'une routine précédente.
-  useEffect(() => {
-    const exerciseIds = new Set(detail?.exercises.map((exercise) => exercise.id) ?? []);
-    slots.value = slots.value.filter((slot) => exerciseIds.has(slot.id));
-  }, [detail, slots]);
 
   if (!detail) return null;
 
@@ -169,28 +90,30 @@ export default function RoutineEditorScreen() {
     ]);
   }
 
-  function handleDrop(draggedId: number, toIndex: number) {
+  function moveExercise(exerciseId: number, direction: -1 | 1) {
+    // Le touch du bouton remonte aussi au conteneur qui ferme le mode.
+    setIsReordering(true);
     const cur = detail;
     if (!cur) return;
     const arr = [...cur.exercises];
-    const from = arr.findIndex((e) => e.id === draggedId);
+    const from = arr.findIndex((e) => e.id === exerciseId);
     if (from < 0) return;
-    const [item] = arr.splice(from, 1);
-    const target = Math.max(0, Math.min(toIndex, arr.length));
-    if (target === from) return;
-    arr.splice(target, 0, item);
+    const target = from + direction;
+    if (target < 0 || target >= arr.length) return;
+    [arr[from], arr[target]] = [arr[target], arr[from]];
     setDetail({ ...cur, exercises: arr });
     void reorderTemplateExercises(db, arr.map((e) => e.id));
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAwareScrollView
         bottomOffset={16}
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
-        scrollEnabled={!isDragging}
+        onTouchStart={() => {
+          if (isReordering) setIsReordering(false);
+        }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
         <TextInput
@@ -216,6 +139,14 @@ export default function RoutineEditorScreen() {
           ))}
         </View>
 
+        <Pressable
+          style={[styles.reorderButton, { borderColor: isReordering ? '#007AFF' : colors.backgroundSelected }]}
+          onPress={() => setIsReordering(true)}>
+          <Text style={{ color: '#007AFF', fontWeight: '700' }}>
+            ↕ Réordonner les exercices
+          </Text>
+        </Pressable>
+
         {detail.exercises.length === 0 && (
           <Text style={{ color: colors.textSecondary }}>
             Ajoute des exercices pour composer ta routine.
@@ -226,19 +157,14 @@ export default function RoutineEditorScreen() {
             key={te.id}
             te={te}
             colors={colors}
-            slots={slots}
-            dragId={dragId}
-            fromIndex={fromIndex}
-            hoverIndex={hoverIndex}
-            dragY={dragY}
-            dragH={dragH}
-            pan={makePan(te)}
-            onSlotLayout={handleSlotLayout}
-            onDrop={handleDrop}
+            isDuplicate={detail.exercises.filter((entry) => entry.exercise_id === te.exercise_id).length > 1}
+            isReordering={isReordering}
+            onMove={(direction) => moveExercise(te.id, direction)}
             onRemove={() => void removeTe(te)}
             onChangeSetCount={(delta) => void changeSetCount(te, Math.max(1, te.sets.length + delta))}
             onChangeType={(t) => void changeType(te, t)}
             onUpdateSet={(ts, updates) => void updateTs(ts, updates)}
+            onChangeSide={(side) => void changeSide(te, side)}
           />
         ))}
 
@@ -276,7 +202,6 @@ export default function RoutineEditorScreen() {
         onConfirm={handleValidatePast}
       />
     </SafeAreaView>
-    </GestureHandlerRootView>
   );
 
   async function removeTe(te: TemplateExercise & { exercise: Exercise; sets: TemplateSet[] }) {
@@ -308,99 +233,87 @@ export default function RoutineEditorScreen() {
     await updateTemplateSet(db, ts.id, updates);
     await getTemplateDetail(db, Number(id)).then(setDetail);
   }
+
+  async function changeSide(te: Te, side: Te['side']) {
+    await updateTemplateExercise(db, te.id, { side });
+    await getTemplateDetail(db, Number(id)).then(setDetail);
+  }
 }
 
 function SortableExercise({
   te,
   colors,
-  slots,
-  dragId,
-  fromIndex,
-  hoverIndex,
-  dragY,
-  dragH,
-  pan,
-  onSlotLayout,
-  onDrop,
+  isDuplicate,
+  isReordering,
+  onMove,
   onRemove,
   onChangeSetCount,
   onChangeType,
   onUpdateSet,
+  onChangeSide,
 }: {
   te: Te;
   colors: ReturnType<typeof useTheme>;
-  slots: SlotSV;
-  dragId: SharedValue<number | null>;
-  fromIndex: SharedValue<number>;
-  hoverIndex: SharedValue<number>;
-  dragY: SharedValue<number>;
-  dragH: SharedValue<number>;
-  pan: PanGesture;
-  onSlotLayout: (slotId: number, y: number, h: number) => void;
-  onDrop: (draggedId: number, toIndex: number) => void;
+  isDuplicate: boolean;
+  isReordering: boolean;
+  onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
   onChangeSetCount: (delta: number) => void;
   onChangeType: (type: SetType) => void;
   onUpdateSet: (ts: TemplateSet, updates: { target_reps?: number; target_weight?: number; target_seconds?: number }) => void;
+  onChangeSide: (side: Te['side']) => void;
 }) {
-  const animated = useAnimatedStyle(() => {
-    const list = slots.value;
-    const idx = list.findIndex((s) => s.id === te.id);
-    if (idx < 0 || dragId.value === null) return { transform: [{ translateY: 0 }] };
-    if (dragId.value === te.id) {
-      return {
-        transform: [{ translateY: dragY.value }],
-        zIndex: 100,
-        elevation: 24,
-        shadowColor: '#000',
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
-        opacity: 0.95,
-      };
-    }
-    const from = fromIndex.value;
-    const to = hoverIndex.value;
-    const dist = dragH.value + CARD_GAP;
-    let shift = 0;
-    if (from < to && idx > from && idx <= to) shift = -dist;
-    else if (to < from && idx >= to && idx < from) shift = dist;
-    return { transform: [{ translateY: shift }] };
-  });
-
   return (
-    <Animated.View
-      style={[styles.card, { backgroundColor: colors.backgroundElement }, animated]}
-      onLayout={(e) => {
-        const { y, height } = e.nativeEvent.layout;
-        onSlotLayout(te.id, y, height);
-      }}>
+    <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.cardHeader}>
-        <GestureDetector gesture={pan}>
-          <Pressable
-            hitSlop={12}
-            style={styles.dragHandle}
-            accessibilityRole="button"
-            accessibilityLabel={`Déplacer ${te.exercise.name}`}
-            accessibilityHint="Faites glisser verticalement pour changer sa position dans la routine">
-            <Text style={{ color: colors.textSecondary, fontSize: 20, fontWeight: '700' }}>☰</Text>
-          </Pressable>
-        </GestureDetector>
+        {isReordering && (
+          <View style={styles.moveControls}>
+            <Pressable hitSlop={8} onPress={() => onMove(-1)} accessibilityLabel={`Monter ${te.exercise.name}`}>
+              <Text style={styles.moveArrow}>↑</Text>
+            </Pressable>
+            <Pressable hitSlop={8} onPress={() => onMove(1)} accessibilityLabel={`Descendre ${te.exercise.name}`}>
+              <Text style={styles.moveArrow}>↓</Text>
+            </Pressable>
+          </View>
+        )}
         <Pressable
           style={styles.exerciseLink}
           onPress={() => router.push(`/exercice/${te.exercise.id}`)}
           accessibilityRole="link"
           accessibilityLabel={`Ouvrir l’exercice ${te.exercise.name}`}>
           <ExerciseImage name={te.exercise.name} muscle={te.exercise.muscle} width={48} radius={6} />
-          <Text style={[styles.exerciseName, { color: colors.text }]}>
-            {te.exercise.name}
-            {te.side ? ` (${te.side === 'right' ? 'droite' : 'gauche'})` : ''}
-          </Text>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[styles.exerciseName, { color: colors.text }]}>{te.exercise.name}</Text>
+            {te.side && <SideTag side={te.side} />}
+          </View>
         </Pressable>
         <Pressable hitSlop={8} onPress={onRemove}>
           <Text style={{ color: '#FF453A' }}>×</Text>
         </Pressable>
       </View>
+      {isDuplicate && (
+        <View style={styles.sideSelector}>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>Côté</Text>
+          {([
+            { value: null, label: 'Aucun' },
+            { value: 'right', label: 'Droite' },
+            { value: 'left', label: 'Gauche' },
+          ] as const).map((option) => (
+            <Pressable
+              key={option.label}
+              onPress={() => onChangeSide(option.value)}
+              style={[
+                styles.sideOption,
+                { borderColor: te.side === option.value ? '#007AFF' : colors.backgroundSelected },
+                te.side === option.value && { backgroundColor: '#007AFF' },
+              ]}>
+              <Text style={{ color: te.side === option.value ? '#fff' : colors.textSecondary, fontSize: 12, fontWeight: '700' }}>
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       <Stepper
         label="séries"
         value={te.sets.length}
@@ -464,7 +377,15 @@ function SortableExercise({
           )}
         </View>
       ))}
-    </Animated.View>
+    </View>
+  );
+}
+
+function SideTag({ side }: { side: NonNullable<Te['side']> }) {
+  return (
+    <View style={styles.sideTag}>
+      <Text style={styles.sideTagText}>{side === 'right' ? 'Droite' : 'Gauche'}</Text>
+    </View>
   );
 }
 
@@ -509,15 +430,21 @@ const styles = StyleSheet.create({
   nameInput: { fontSize: 26, fontWeight: '800' },
   colorRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 4 },
   colorSwatch: { width: 32, height: 32, borderRadius: 16 },
+  reorderButton: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   card: {
     borderRadius: 14,
     padding: 16,
     gap: 10,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dragHandle: { paddingVertical: 4 },
   exerciseLink: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   exerciseName: { flex: 1, fontWeight: '700' },
+  moveControls: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  moveArrow: { color: '#007AFF', fontWeight: '800', fontSize: 20 },
+  sideSelector: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sideOption: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  sideTag: { alignSelf: 'flex-start', backgroundColor: '#007AFF22', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
+  sideTagText: { color: '#007AFF', fontSize: 11, fontWeight: '800' },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
   typeRow: { flexDirection: 'row', gap: 8 },
   typeButton: {
