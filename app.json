@@ -2,7 +2,7 @@
   "expo": {
     "name": "Crux",
     "slug": "test_app",
-    "version": "1.10.5",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "testapp",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.anonymous.test_app",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
