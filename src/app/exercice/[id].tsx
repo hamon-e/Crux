@@ -22,9 +22,11 @@ import { SIDE_LABELS } from '@/components/workout-exercise-card';
 import {
   getExerciseById,
   getDefaultExercises,
+  getExerciseMatchTargets,
   getExerciseHistory,
   getExerciseProgression,
   getExerciseSteps,
+  matchDefaultExerciseToExercise,
   matchCustomExerciseToDefault,
   updateExerciseImage,
   updateExerciseMuscle,
@@ -50,7 +52,7 @@ export default function ExerciseScreen() {
   const [coverImage, setCoverImage] = useState<ReturnType<typeof getStepImageSource>>(null);
   const [muscleOpen, setMuscleOpen] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
-  const [defaultExercises, setDefaultExercises] = useState<Exercise[]>([]);
+  const [matchExercises, setMatchExercises] = useState<Exercise[]>([]);
   const [matchSearch, setMatchSearch] = useState('');
   const [isMatching, setIsMatching] = useState(false);
 
@@ -85,24 +87,31 @@ export default function ExerciseScreen() {
 
   async function openMatchPicker() {
     try {
-      setDefaultExercises(await getDefaultExercises(db));
+      setMatchExercises(
+        currentExercise.is_custom
+          ? await getDefaultExercises(db)
+          : await getExerciseMatchTargets(db, currentExercise.id),
+      );
       setMatchSearch('');
       setMatchOpen(true);
     } catch (error) {
-      console.warn('Impossible de charger les exercices par défaut', error);
-      alert('Erreur', 'Les exercices par défaut ne peuvent pas être chargés.');
+      console.warn('Impossible de charger les exercices à associer', error);
+      alert('Erreur', 'Les exercices ne peuvent pas être chargés.');
     }
   }
 
   function confirmMatch(target: Exercise) {
+    const customToDefault = currentExercise.is_custom === 1;
     confirm(
       'Associer cet exercice ?',
-      `L’historique et les routines de « ${currentExercise.name} » seront transférés vers « ${target.name} ». L’exercice personnalisé sera ensuite supprimé.`,
+      customToDefault
+        ? `L’historique et les routines de « ${currentExercise.name} » seront transférés vers « ${target.name} ». L’exercice personnalisé sera ensuite supprimé.`
+        : `L’historique, les records et les routines de « ${currentExercise.name} » seront transférés vers « ${target.name} ». L’exercice de l’App restera disponible.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Associer et supprimer',
-          style: 'destructive',
+          text: customToDefault ? 'Associer et supprimer' : 'Associer et conserver',
+          style: customToDefault ? 'destructive' : 'default',
           onPress: () => void handleMatch(target),
         },
       ],
@@ -112,7 +121,11 @@ export default function ExerciseScreen() {
   async function handleMatch(target: Exercise) {
     setIsMatching(true);
     try {
-      await matchCustomExerciseToDefault(db, currentExercise.id, target.id);
+      if (currentExercise.is_custom) {
+        await matchCustomExerciseToDefault(db, currentExercise.id, target.id);
+      } else {
+        await matchDefaultExerciseToExercise(db, currentExercise.id, target.id);
+      }
       setMatchOpen(false);
       router.replace(`/exercice/${target.id}`);
     } catch (error) {
@@ -171,7 +184,7 @@ export default function ExerciseScreen() {
     : canUploadImage
       ? handleUploadImage
       : undefined;
-  const matchingExercises = defaultExercises.filter((candidate) =>
+  const matchingExercises = matchExercises.filter((candidate) =>
     candidate.name.toLocaleLowerCase().includes(matchSearch.toLocaleLowerCase().trim()),
   );
 
@@ -236,6 +249,19 @@ export default function ExerciseScreen() {
             <Text style={[styles.matchButtonTitle, { color: colors.text }]}>⇄ Associer à un exercice par défaut</Text>
             <Text style={{ color: colors.textSecondary }}>
               Transfère l’historique puis supprime cet exercice.
+            </Text>
+          </Pressable>
+        )}
+
+        {exercise.is_custom === 0 && (
+          <Pressable
+            style={[styles.matchButton, { borderColor: colors.backgroundSelected }]}
+            onPress={() => void openMatchPicker()}
+            accessibilityRole="button"
+            accessibilityLabel="Associer à un autre exercice">
+            <Text style={[styles.matchButtonTitle, { color: colors.text }]}>⇄ Associer à un autre exercice</Text>
+            <Text style={{ color: colors.textSecondary }}>
+              Transfère l’historique et les stats sans supprimer l’exercice de l’App.
             </Text>
           </Pressable>
         )}
@@ -332,7 +358,9 @@ export default function ExerciseScreen() {
       <Modal visible={matchOpen} animationType="slide" onRequestClose={() => setMatchOpen(false)}>
         <SafeAreaView style={[styles.matchModal, { backgroundColor: colors.background }]}>
           <View style={styles.matchHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Exercice par défaut</Text>
+            <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>
+              {currentExercise.is_custom ? 'Exercice par défaut' : 'Exercice de la base'}
+            </Text>
             <Pressable onPress={() => setMatchOpen(false)} disabled={isMatching} accessibilityRole="button">
               <Text style={{ color: colors.textSecondary }}>Annuler</Text>
             </Pressable>
@@ -362,6 +390,7 @@ export default function ExerciseScreen() {
                 <Text style={{ color: colors.textSecondary }}>
                   {MUSCLE_LABELS[candidate.muscle] ?? candidate.muscle} · {candidate.equipment}
                 </Text>
+                <ExerciseOriginTag isCustom={candidate.is_custom} compact />
               </Pressable>
             ))}
             {matchingExercises.length === 0 && (
