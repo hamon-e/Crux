@@ -129,11 +129,7 @@ export default function HistoryScreen() {
         renderItem={({ item }) => (
           <Pressable
             style={[styles.card, { backgroundColor: colors.backgroundElement }]}
-            onPress={() =>
-              router.push(
-                item.template_id ? `/routines/${item.template_id}` : `/historique/${item.id}`
-              )
-            }>
+            onPress={() => router.push(`/historique/${item.id}`)}>
             <View style={{ flex: 1 }}>
               <View style={styles.workoutTitle}>
                 <View
