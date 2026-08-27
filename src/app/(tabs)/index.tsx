@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import {
   BackHandler,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -227,7 +229,9 @@ export default function SessionScreen() {
   // ---- Séance en cours ----
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoidingView}>
         <View style={styles.header}>
           <TextInput
             style={[styles.nameInput, { color: colors.text }]}
@@ -316,7 +320,7 @@ export default function SessionScreen() {
             <Text style={styles.primaryButtonText}>Terminer</Text>
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
       <Modal visible={finishOpen} transparent animationType="fade" onRequestClose={() => setFinishOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setFinishOpen(false)}>
@@ -348,6 +352,9 @@ export default function SessionScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
     flex: 1,
   },
   emptyContent: {
