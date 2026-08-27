@@ -68,11 +68,20 @@ export function WorkoutExerciseCard({
           <View style={[styles.setRowHeader]}>
             <Text style={[styles.colIndex, { color: colors.textSecondary }]}>#</Text>
             {timed ? (
-              <Text style={[styles.colInput, { color: colors.textSecondary }]}>Durée (s)</Text>
+              <Text
+                style={[styles.colInput, styles.centeredLabel, { color: colors.textSecondary }]}>
+                Durée (s)
+              </Text>
             ) : (
               <>
-                <Text style={[styles.colInput, { color: colors.textSecondary }]}>Poids (kg)</Text>
-                <Text style={[styles.colInput, { color: colors.textSecondary }]}>Reps</Text>
+                <Text
+                  style={[styles.colInput, styles.centeredLabel, { color: colors.textSecondary }]}>
+                  Poids (kg)
+                </Text>
+                <Text
+                  style={[styles.colInput, styles.centeredLabel, { color: colors.textSecondary }]}>
+                  Reps
+                </Text>
               </>
             )}
             <Text style={[styles.colDone, { color: colors.textSecondary }]}>✓</Text>
@@ -199,6 +208,8 @@ const styles = StyleSheet.create({
   colInput: {
     flex: 1,
     marginHorizontal: 4,
+  },
+  centeredLabel: {
     textAlign: 'center',
   },
   colDone: {
@@ -216,7 +227,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     fontSize: 16,
-    textAlign: 'center',
   },
   doneButton: {
     width: 32,
