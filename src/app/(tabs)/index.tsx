@@ -343,7 +343,7 @@ export default function SessionScreen() {
         <SafeAreaView style={styles.chronoExpandedScreen}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Remettre le chronomètre en bas"
+            accessibilityLabel="Réduire le chronomètre"
             hitSlop={8}
             style={({ pressed }) => [styles.chronoExpandedIcon, pressed && styles.chronoIconPressed]}
             onPress={() => setChronoExpanded(false)}>
@@ -363,10 +363,10 @@ export default function SessionScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Remettre le chronomètre en bas"
+            accessibilityLabel="Réduire le chronomètre"
             style={({ pressed }) => [styles.chronoCollapseButton, pressed && styles.chronoCollapseButtonPressed]}
             onPress={() => setChronoExpanded(false)}>
-            <Text style={styles.chronoCollapseButtonText}>Remettre en bas</Text>
+            <Text style={styles.chronoCollapseButtonText}>Réduire le chronomètre</Text>
           </Pressable>
         </SafeAreaView>
       </Modal>
