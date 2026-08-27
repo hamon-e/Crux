@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -35,6 +35,8 @@ export default function RoutineEditorScreen() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [pastDateOpen, setPastDateOpen] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  const hasMovedSinceTouchStart = useRef(false);
+  const isReorderArrowTouch = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -91,8 +93,6 @@ export default function RoutineEditorScreen() {
   }
 
   function moveExercise(exerciseId: number, direction: -1 | 1) {
-    // Le touch du bouton remonte aussi au conteneur qui ferme le mode.
-    setIsReordering(true);
     const cur = detail;
     if (!cur) return;
     const arr = [...cur.exercises];
@@ -112,7 +112,16 @@ export default function RoutineEditorScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         onTouchStart={() => {
-          if (isReordering) setIsReordering(false);
+          hasMovedSinceTouchStart.current = false;
+        }}
+        onTouchMove={() => {
+          hasMovedSinceTouchStart.current = true;
+        }}
+        onTouchEnd={() => {
+          if (isReordering && !hasMovedSinceTouchStart.current && !isReorderArrowTouch.current) {
+            setIsReordering(false);
+          }
+          isReorderArrowTouch.current = false;
         }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
@@ -141,9 +150,9 @@ export default function RoutineEditorScreen() {
 
         <Pressable
           style={[styles.reorderButton, { borderColor: isReordering ? '#007AFF' : colors.backgroundSelected }]}
-          onPress={() => setIsReordering(true)}>
+          onPress={() => setIsReordering(!isReordering)}>
           <Text style={{ color: '#007AFF', fontWeight: '700' }}>
-            ↕ Réordonner les exercices
+            {isReordering ? '✓ Terminer le réordonnancement' : '↕ Réordonner les exercices'}
           </Text>
         </Pressable>
 
@@ -160,6 +169,9 @@ export default function RoutineEditorScreen() {
             isDuplicate={detail.exercises.filter((entry) => entry.exercise_id === te.exercise_id).length > 1}
             isReordering={isReordering}
             onMove={(direction) => moveExercise(te.id, direction)}
+            onReorderArrowPressIn={() => {
+              isReorderArrowTouch.current = true;
+            }}
             onRemove={() => void removeTe(te)}
             onChangeSetCount={(delta) => void changeSetCount(te, Math.max(1, te.sets.length + delta))}
             onChangeType={(t) => void changeType(te, t)}
@@ -246,6 +258,7 @@ function SortableExercise({
   isDuplicate,
   isReordering,
   onMove,
+  onReorderArrowPressIn,
   onRemove,
   onChangeSetCount,
   onChangeType,
@@ -257,6 +270,7 @@ function SortableExercise({
   isDuplicate: boolean;
   isReordering: boolean;
   onMove: (direction: -1 | 1) => void;
+  onReorderArrowPressIn: () => void;
   onRemove: () => void;
   onChangeSetCount: (delta: number) => void;
   onChangeType: (type: SetType) => void;
@@ -266,16 +280,6 @@ function SortableExercise({
   return (
     <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.cardHeader}>
-        {isReordering && (
-          <View style={styles.moveControls}>
-            <Pressable hitSlop={8} onPress={() => onMove(-1)} accessibilityLabel={`Monter ${te.exercise.name}`}>
-              <Text style={styles.moveArrow}>↑</Text>
-            </Pressable>
-            <Pressable hitSlop={8} onPress={() => onMove(1)} accessibilityLabel={`Descendre ${te.exercise.name}`}>
-              <Text style={styles.moveArrow}>↓</Text>
-            </Pressable>
-          </View>
-        )}
         <Pressable
           style={styles.exerciseLink}
           onPress={() => router.push(`/exercice/${te.exercise.id}`)}
@@ -377,6 +381,26 @@ function SortableExercise({
           )}
         </View>
       ))}
+      {isReordering && (
+        <View style={styles.reorderOverlay}>
+          <Pressable
+            style={styles.reorderZone}
+            onPressIn={onReorderArrowPressIn}
+            onPress={() => onMove(-1)}
+            accessibilityRole="button"
+            accessibilityLabel={`Monter ${te.exercise.name}`}>
+            <Text style={styles.reorderArrow}>↑</Text>
+          </Pressable>
+          <Pressable
+            style={styles.reorderZone}
+            onPressIn={onReorderArrowPressIn}
+            onPress={() => onMove(1)}
+            accessibilityRole="button"
+            accessibilityLabel={`Descendre ${te.exercise.name}`}>
+            <Text style={styles.reorderArrow}>↓</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -435,12 +459,28 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     gap: 10,
+    overflow: 'hidden',
+    position: 'relative',
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   exerciseLink: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   exerciseName: { flex: 1, fontWeight: '700' },
-  moveControls: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  moveArrow: { color: '#007AFF', fontWeight: '800', fontSize: 20 },
+  reorderOverlay: {
+    ...StyleSheet.absoluteFill,
+    flexDirection: 'column',
+    backgroundColor: 'rgba(0, 122, 255, 0.16)',
+  },
+  reorderZone: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reorderArrow: {
+    color: 'rgba(0, 122, 255, 0.72)',
+    fontSize: 84,
+    fontWeight: '800',
+    lineHeight: 90,
+  },
   sideSelector: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sideOption: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   sideTag: { alignSelf: 'flex-start', backgroundColor: '#007AFF22', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
