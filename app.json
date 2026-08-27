@@ -2,7 +2,7 @@
   "expo": {
     "name": "test_app",
     "slug": "test_app",
-    "version": "1.10.3",
+    "version": "1.10.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "testapp",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.anonymous.test_app",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
