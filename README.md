@@ -1,61 +1,63 @@
-# Welcome to your Expo app 👋
+# Carnet d’entraînement
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Application mobile de suivi d’entraînement, pensée pour la musculation, la mobilité et l’escalade. Elle fonctionne localement : les séances, routines et progrès sont enregistrés dans une base SQLite sur l’appareil.
 
-## Get started
+## Fonctionnalités
 
-1. Install dependencies
+- Créer une séance libre ou la démarrer depuis une routine, avec chronomètre, séries, poids, répétitions, durée et RPE.
+- Enregistrer des activités hors musculation (bloc, voie, vélo, course, natation ou randonnée), avec durée, date et notes.
+- Gérer des routines et les mettre à jour depuis une séance terminée.
+- Consulter l’historique, une heatmap d’activité et le suivi hebdomadaire.
+- Suivre les volumes par groupe musculaire, les records personnels et les statistiques globales.
+- Parcourir un arbre de compétences pour la force, la mobilité et l’escalade, puis valider les étapes réalisées.
+- Importer un historique depuis un export CSV de Strong, avec association des exercices.
+- Exporter les données en CSV ou en sauvegarde JSON complète.
+- Programmer un rappel quotidien lorsqu’une routine n’a pas été effectuée depuis au moins sept jours.
 
-   ```bash
-   pnpm install
-   ```
+## Stack technique
 
-   `pnpm` stores package contents in a shared, content-addressable store. This
-   means separate T3 Code worktrees keep isolated `node_modules` links while
-   reusing the same dependency data instead of downloading and copying every
-   package again.
+- [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/) et React Native
+- Expo Router pour la navigation
+- `expo-sqlite` pour la persistance locale et les migrations de schéma
+- TypeScript, NativeWind et React Native Reanimated
 
-2. Start the app
+L’application cible iOS, Android et le web. Les notifications locales sont disponibles sur mobile.
 
-   ```bash
-   npx expo start
-   ```
+## Démarrage
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Prérequis : Node.js 22.13 ou plus récent et [pnpm](https://pnpm.io/). Expo SDK 57 est associé à React Native 0.86 et React 19.2.3 ; consulter la [référence SDK 57](https://docs.expo.dev/versions/v57.0.0/) pour les détails de compatibilité.
 
 ```bash
-npm run reset-project
+pnpm install
+pnpm start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Puis choisir une cible dans le terminal Expo, ou lancer directement :
 
-### Other setup steps
+```bash
+pnpm ios
+pnpm android
+pnpm web
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Commandes utiles
 
-## Learn more
+```bash
+pnpm lint       # Vérification ESLint
+pnpm typecheck  # Vérification TypeScript
+pnpm format     # Formatage avec Prettier
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Organisation du projet
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```text
+src/app/         Écrans et navigation Expo Router
+src/components/  Composants réutilisables
+src/db/          Schéma SQLite, migrations, requêtes et catalogue d’exercices
+src/lib/         Import Strong, rappels et logique d’arbre de compétences
+src/assets/      Illustrations des compétences
+```
 
-## Join the community
+## Données et sauvegarde
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Les données ne dépendent d’aucun service distant. Utiliser **Plus → Exporter / sauvegarder** pour créer un CSV partageable ou une sauvegarde JSON. L’import disponible dans **Plus → Importer depuis Strong (CSV)** est conçu pour les exports Strong.
