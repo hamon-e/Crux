@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ExerciseImage } from '@/components/exercise-image';
@@ -20,6 +20,46 @@ interface Props {
   onUpdateSet: (setId: number, updates: { weight?: number; reps?: number; duration?: number; done?: number }) => void;
   onDeleteSet?: (setId: number) => void;
   onRemoveExercise?: () => void;
+}
+
+interface CenteredNumberInputProps {
+  value: string;
+  keyboardType: 'decimal-pad' | 'number-pad';
+  color: string;
+  borderColor: string;
+  onEndEditing: (value: string) => void;
+}
+
+function CenteredNumberInput({
+  value: initialValue,
+  keyboardType,
+  color,
+  borderColor,
+  onEndEditing,
+}: CenteredNumberInputProps) {
+  const inputRef = useRef<TextInput>(null);
+  const [editedValue, setEditedValue] = useState({ initialValue, value: initialValue });
+  const value = editedValue.initialValue === initialValue ? editedValue.value : initialValue;
+
+  // `textAlign: 'center'` blocks a parent ScrollView from taking over a drag on Android.
+  // Instead, keep the native input left-aligned and center its content-sized box.
+  const inputWidth = Math.max(24, Math.min(84, value.length * 10 + 8));
+
+  return (
+    <Pressable
+      style={[styles.inputShell, { borderColor }]}
+      onPress={() => inputRef.current?.focus()}>
+      <TextInput
+        ref={inputRef}
+        style={[styles.input, { color, width: inputWidth }]}
+        keyboardType={keyboardType}
+        rejectResponderTermination={false}
+        value={value}
+        onChangeText={(nextValue) => setEditedValue({ initialValue, value: nextValue })}
+        onEndEditing={(event) => onEndEditing(event.nativeEvent.text)}
+      />
+    </Pressable>
+  );
 }
 
 export function WorkoutExerciseCard({
@@ -92,47 +132,35 @@ export function WorkoutExerciseCard({
             <View key={s.id} style={styles.setRow}>
               <Text style={[styles.colIndex, { color: colors.text }]}>{i + 1}</Text>
               {timed ? (
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.colInput,
-                    { color: colors.text, borderColor: colors.backgroundSelected },
-                  ]}
+                <CenteredNumberInput
+                  value={String(s.duration ?? 0)}
                   keyboardType="number-pad"
-                  rejectResponderTermination={false}
-                  defaultValue={String(s.duration ?? 0)}
-                  onEndEditing={(e) => {
-                    const v = parseInt(e.nativeEvent.text, 10);
+                  color={colors.text}
+                  borderColor={colors.backgroundSelected}
+                  onEndEditing={(text) => {
+                    const v = parseInt(text, 10);
                     if (!Number.isNaN(v)) onUpdateSet(s.id, { duration: Math.max(0, v) });
                   }}
                 />
               ) : (
                 <>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      styles.colInput,
-                      { color: colors.text, borderColor: colors.backgroundSelected },
-                    ]}
+                  <CenteredNumberInput
+                    value={String(s.weight)}
                     keyboardType="decimal-pad"
-                    rejectResponderTermination={false}
-                    defaultValue={String(s.weight)}
-                    onEndEditing={(e) => {
-                      const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
+                    color={colors.text}
+                    borderColor={colors.backgroundSelected}
+                    onEndEditing={(text) => {
+                      const v = parseFloat(text.replace(',', '.'));
                       if (!Number.isNaN(v)) onUpdateSet(s.id, { weight: v });
                     }}
                   />
-                  <TextInput
-                    style={[
-                      styles.input,
-                      styles.colInput,
-                      { color: colors.text, borderColor: colors.backgroundSelected },
-                    ]}
+                  <CenteredNumberInput
+                    value={String(s.reps)}
                     keyboardType="number-pad"
-                    rejectResponderTermination={false}
-                    defaultValue={String(s.reps)}
-                    onEndEditing={(e) => {
-                      const v = parseInt(e.nativeEvent.text, 10);
+                    color={colors.text}
+                    borderColor={colors.backgroundSelected}
+                    onEndEditing={(text) => {
+                      const v = parseInt(text, 10);
                       if (!Number.isNaN(v)) onUpdateSet(s.id, { reps: v });
                     }}
                   />
@@ -221,12 +249,18 @@ const styles = StyleSheet.create({
     width: 28,
     alignItems: 'center',
   },
-  input: {
+  inputShell: {
+    flex: 1,
+    minHeight: 38,
+    marginHorizontal: 4,
     borderWidth: 1.5,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  input: {
     fontSize: 16,
+    padding: 0,
   },
   doneButton: {
     width: 32,
