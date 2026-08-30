@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Svg, Path } from 'react-native-svg';
 
 import { useTheme } from '@/hooks/use-theme';
@@ -9,8 +9,6 @@ const WEEKS = 26;
 const CELL = 14;
 const GAP = 3;
 const FALLBACK_COLOR = '#4a90d9';
-
-export const HEATMAP_CARD_WIDTH = WEEKS * (CELL - GAP) + (WEEKS - 1) * GAP + 16 * 2;
 
 export interface DayInfo {
   count: number;
@@ -106,10 +104,13 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
   return (
     <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
       <Text style={[styles.title, { color: colors.text }]}>Séances</Text>
-      <View style={styles.grid}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.grid}>
         {weeks.map((col, i) => (
           <View key={i} style={styles.col}>
-            {col.map((cell, j) => {
+            {col.map((cell) => {
               if (!cell) return null;
               if (!cell.info) {
                 return (
@@ -123,7 +124,7 @@ export function WorkoutHeatmap({ days }: { days: Map<string, DayInfo> }) {
             })}
           </View>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
