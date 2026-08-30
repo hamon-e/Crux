@@ -17,7 +17,7 @@ import {
 } from '@/db/queries';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/use-theme';
-import { WorkoutHeatmap, HEATMAP_CARD_WIDTH, type DayInfo } from '@/components/workout-heatmap';
+import { WorkoutHeatmap, type DayInfo } from '@/components/workout-heatmap';
 import { ROUTINE_COLORS } from '@/constants/routine-colors';
 
 type WorkoutRow = Awaited<ReturnType<typeof getWorkouts>>[number];
@@ -186,8 +186,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   weekCard: {
-    width: HEATMAP_CARD_WIDTH,
-    alignSelf: 'flex-start',
+    width: '100%',
   },
   dayColumn: {
     flex: 1,
