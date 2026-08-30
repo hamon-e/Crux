@@ -6,15 +6,12 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import {
-  createTemplate,
   deleteAllData,
   getSetting,
-  getTemplates,
   setSetting,
 } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
-import { ROUTINE_COLORS } from '@/constants/routine-colors';
 import {
   REMINDER_DEFAULT_HOUR,
   REMINDER_DEFAULT_MINUTE,
@@ -25,9 +22,6 @@ import {
 export default function MoreScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
-  const [templates, setTemplates] = useState<(Awaited<ReturnType<typeof getTemplates>>)[number][]>([]);
-  const [newRoutineName, setNewRoutineName] = useState('');
-  const [newRoutineColor, setNewRoutineColor] = useState(ROUTINE_COLORS[0]);
   const [restSeconds, setRestSeconds] = useState('90');
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderHour, setReminderHour] = useState(String(REMINDER_DEFAULT_HOUR));
@@ -36,7 +30,6 @@ export default function MoreScreen() {
   useFocusEffect(
     useCallback(() => {
       void (async () => {
-        setTemplates(await getTemplates(db));
         const saved = await getSetting(db, 'rest_seconds');
         if (saved) setRestSeconds(saved);
         const savedReminderEnabled = await getSetting(db, 'reminder_enabled');
@@ -48,13 +41,6 @@ export default function MoreScreen() {
       })();
     }, [db])
   );
-
-  async function addRoutine() {
-    if (!newRoutineName.trim()) return;
-    const id = await createTemplate(db, newRoutineName.trim(), newRoutineColor);
-    setNewRoutineName('');
-    router.push(`/routines/${id}`);
-  }
 
   async function saveRest() {
     const v = parseInt(restSeconds, 10);
@@ -98,7 +84,6 @@ export default function MoreScreen() {
           style: 'destructive',
           onPress: async () => {
             await deleteAllData(db);
-            setTemplates([]);
           },
         },
       ]
@@ -113,59 +98,7 @@ export default function MoreScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
-        <Text style={[styles.title, { color: colors.text }]}>Plus</Text>
-
-        <SectionTitle text="Routines" color={colors.textSecondary} />
-        <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TextInput
-              style={[
-                styles.input,
-                styles.flex1,
-                { color: colors.text, borderColor: colors.backgroundSelected },
-              ]}
-              placeholder="Nom de la routine"
-              placeholderTextColor={colors.textSecondary}
-              value={newRoutineName}
-              onChangeText={setNewRoutineName}
-            />
-            <Pressable
-              style={[styles.addButton, { backgroundColor: '#007AFF' }]}
-              onPress={() => void addRoutine()}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Créer</Text>
-            </Pressable>
-          </View>
-          <View style={styles.colorRow}>
-            {ROUTINE_COLORS.map((c) => (
-              <Pressable
-                key={c}
-                style={[
-                  styles.colorSwatch,
-                  {
-                    backgroundColor: c,
-                    borderWidth: newRoutineColor === c ? 3 : 0,
-                    borderColor: colors.text,
-                  },
-                ]}
-                onPress={() => setNewRoutineColor(c)}
-              />
-            ))}
-          </View>
-          {templates.map((t) => (
-            <Pressable
-              key={t.id}
-              style={styles.routineRow}
-              onPress={() => router.push(`/routines/${t.id}`)}>
-              <View
-                style={[styles.routineDot, { backgroundColor: t.color || ROUTINE_COLORS[0] }]}
-              />
-              <Text style={{ color: colors.text, flex: 1 }}>{t.name}</Text>
-              <Text style={{ color: colors.textSecondary }}>
-                {t.exercise_count} exercices ›
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Réglages</Text>
 
         <SectionTitle text="Réglages" color={colors.textSecondary} />
         <View style={[styles.card, { backgroundColor: colors.backgroundElement, gap: 10 }]}>
@@ -262,37 +195,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 15,
-  },
-  flex1: { flex: 1 },
-  addButton: {
-    borderRadius: 10,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  routineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#8884',
-  },
-  colorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 12,
-  },
-  colorSwatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  routineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
   },
   dataRow: {
     flexDirection: 'row',

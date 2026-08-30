@@ -96,9 +96,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="plus"
         options={{
-          title: 'Plus',
+          title: 'Réglages',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="ellipsis-horizontal-outline" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />
