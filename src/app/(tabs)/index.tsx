@@ -20,6 +20,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { WorkoutExerciseCard } from '@/components/workout-exercise-card';
 import {
   addSet,
+  createTemplate,
   deleteWorkout,
   finishWorkout,
   getActiveWorkout,
@@ -32,6 +33,7 @@ import {
   type SetUpdates,
  WorkoutDetail } from '@/db/queries';
 import type { Template } from '@/db/types';
+import { ROUTINE_COLORS } from '@/constants/routine-colors';
 import { useTheme } from '@/hooks/use-theme';
 import { confirm } from '@/lib/alert';
 
@@ -64,6 +66,9 @@ export default function SessionScreen() {
   const [chronoMs, setChronoMs] = useState(0);
   const [chronoVisible, setChronoVisible] = useState(true);
   const [chronoExpanded, setChronoExpanded] = useState(false);
+  const [createRoutineOpen, setCreateRoutineOpen] = useState(false);
+  const [newRoutineName, setNewRoutineName] = useState('');
+  const [newRoutineColor, setNewRoutineColor] = useState(ROUTINE_COLORS[0]);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const chronoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const chronoStart = useRef<number | null>(null);
@@ -136,6 +141,20 @@ export default function SessionScreen() {
   async function handleStart(templateId?: number) {
     await startWorkout(db, templateId);
     await reload();
+  }
+
+  function openCreateRoutine() {
+    setNewRoutineName('');
+    setNewRoutineColor(ROUTINE_COLORS[0]);
+    setCreateRoutineOpen(true);
+  }
+
+  async function createRoutine() {
+    const name = newRoutineName.trim();
+    if (!name) return;
+    const id = await createTemplate(db, name, newRoutineColor);
+    setCreateRoutineOpen(false);
+    router.push(`/routines/${id}`);
   }
 
   function handleFinish() {
@@ -216,19 +235,80 @@ export default function SessionScreen() {
           </Text>
           {templates.length === 0 && (
             <Text style={{ color: colors.textSecondary }}>
-              Aucune routine. Crée-en une dans l&apos;onglet Plus.
+              Aucune routine pour le moment.
             </Text>
           )}
           {templates.map((t) => (
-            <Pressable
-              key={t.id}
-              style={[styles.templateRow, { backgroundColor: colors.backgroundElement }]}
-              onPress={() => handleStart(t.id)}>
-              <Text style={{ color: colors.text, fontWeight: '600', flex: 1 }}>{t.name}</Text>
-              <Text style={{ color: colors.textSecondary }}>{t.exercise_count} ex.</Text>
-            </Pressable>
+            <View key={t.id} style={[styles.templateRow, { backgroundColor: colors.backgroundElement }]}>
+              <Pressable style={styles.templateStartArea} onPress={() => handleStart(t.id)}>
+                <Text style={{ color: colors.text, fontWeight: '600', flex: 1 }}>{t.name}</Text>
+                <Text style={{ color: colors.textSecondary }}>{t.exercise_count} ex.</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Modifier la routine ${t.name}`}
+                hitSlop={8}
+                style={[styles.editRoutineButton, { borderColor: colors.backgroundSelected }]}
+                onPress={() => router.push(`/routines/${t.id}`)}>
+                <Text style={{ color: '#007AFF', fontWeight: '700' }}>Modifier</Text>
+              </Pressable>
+            </View>
           ))}
+          <Pressable
+            style={[styles.createRoutineButton, { borderColor: '#007AFF' }]}
+            onPress={openCreateRoutine}>
+            <Text style={{ color: '#007AFF', fontWeight: '700' }}>+ Créer une routine</Text>
+          </Pressable>
         </ScrollView>
+
+        <Modal
+          visible={createRoutineOpen}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setCreateRoutineOpen(false)}>
+          <KeyboardAvoidingView
+            style={styles.modalBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={[styles.modalCard, { backgroundColor: colors.background }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Nouvelle routine</Text>
+              <TextInput
+                autoFocus
+                style={[styles.routineNameInput, { backgroundColor: colors.backgroundElement, color: colors.text }]}
+                placeholder="Nom de la routine"
+                placeholderTextColor={colors.textSecondary}
+                value={newRoutineName}
+                onChangeText={setNewRoutineName}
+                onSubmitEditing={() => void createRoutine()}
+                returnKeyType="done"
+              />
+              <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Couleur</Text>
+              <View style={styles.colorRow}>
+                {ROUTINE_COLORS.map((color) => (
+                  <Pressable
+                    key={color}
+                    style={[
+                      styles.colorSwatch,
+                      {
+                        backgroundColor: color,
+                        borderWidth: newRoutineColor === color ? 3 : 0,
+                        borderColor: colors.text,
+                      },
+                    ]}
+                    onPress={() => setNewRoutineColor(color)}
+                  />
+                ))}
+              </View>
+              <View style={styles.modalActions}>
+                <Pressable onPress={() => setCreateRoutineOpen(false)}>
+                  <Text style={{ color: colors.textSecondary }}>Annuler</Text>
+                </Pressable>
+                <Pressable onPress={() => void createRoutine()}>
+                  <Text style={{ color: '#007AFF', fontWeight: '700' }}>Créer</Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -429,6 +509,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  templateStartArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editRoutineButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  createRoutineButton: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   header: {
@@ -652,6 +750,27 @@ const styles = StyleSheet.create({
   modalMessage: {
     fontSize: 15,
     marginBottom: 8,
+  },
+  routineNameInput: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 16,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  colorSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   finishButton: {
     borderRadius: 14,
