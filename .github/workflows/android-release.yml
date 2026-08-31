@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Start and wait for the release pipeline
+      - name: Start the release pipeline
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -26,26 +26,3 @@ jobs:
             --repo "$REPOSITORY" \
             --ref "$DEFAULT_BRANCH" \
             -f "release_tag=$RELEASE_TAG"
-
-          for attempt in {1..30}; do
-            release_run_id="$(gh run list \
-              --repo "$REPOSITORY" \
-              --workflow publish-android-release.yml \
-              --branch "$DEFAULT_BRANCH" \
-              --event workflow_dispatch \
-              --limit 30 \
-              --json databaseId,displayTitle \
-              | jq -r --arg release_tag "$RELEASE_TAG" \
-                '.[] | select(.displayTitle == ("Build Android release for " + $release_tag)) | .databaseId' \
-              | head -n 1)"
-
-            if [ -n "$release_run_id" ]; then
-              gh run watch "$release_run_id" --repo "$REPOSITORY" --exit-status
-              exit $?
-            fi
-
-            sleep 2
-          done
-
-          echo "Timed out waiting for the Android release pipeline to start." >&2
-          exit 1
