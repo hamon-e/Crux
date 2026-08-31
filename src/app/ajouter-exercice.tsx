@@ -329,9 +329,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchArea: {
-    gap: 4,
+    gap: 8,
     paddingHorizontal: 24,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   searchActions: {
     flexDirection: "row",
@@ -346,12 +346,14 @@ const styles = StyleSheet.create({
   },
   searchActionText: { color: "#007AFF", fontWeight: "700" },
   searchInput: {
-    flex: 1,
+    height: 48,
     borderWidth: 1.5,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 15,
+    paddingVertical: 0,
+    fontSize: 17,
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
   filters: {
     paddingLeft: 24,
