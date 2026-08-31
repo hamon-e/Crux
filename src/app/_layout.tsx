@@ -8,6 +8,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import '../global.css';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
+import { checkForAppUpdate } from '@/lib/app-update';
 import { initNotifications } from '@/lib/reminders';
 
 SplashScreen.preventAutoHideAsync();
@@ -17,6 +18,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     void initNotifications();
+
+    // Laisse l'animation d'ouverture se terminer avant d'afficher l'alerte.
+    const timeout = setTimeout(() => {
+      void checkForAppUpdate();
+    }, 700);
+
+    return () => clearTimeout(timeout);
   }, []);
 
   return (
