@@ -40,10 +40,12 @@ export default function AddExerciseScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ mode?: string; templateId?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; templateId?: string; search?: string }>();
   const mode = params.mode ?? "workout";
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() =>
+    typeof params.search === "string" ? params.search : "",
+  );
   const [muscleFilter, setMuscleFilter] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -107,7 +109,11 @@ export default function AddExerciseScreen() {
     const treeSearch = search.trim();
     router.push({
       pathname: "/(tabs)/arbre",
-      params: treeSearch ? { search: treeSearch, selectExercise: "1" } : { selectExercise: "1" },
+      params: {
+        selectExercise: "1",
+        templateId: String(templateId),
+        ...(treeSearch ? { search: treeSearch } : {}),
+      },
     });
   }
 
