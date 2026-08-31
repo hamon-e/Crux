@@ -1,4 +1,4 @@
-name: Android release APK
+name: Trigger Android release
 
 on:
   push:
@@ -7,125 +7,45 @@ on:
 
 permissions:
   actions: write
-  contents: write
+  contents: read
 
 jobs:
-  warm_gradle_cache:
-    name: Warm Gradle cache on the default branch
+  trigger_release:
+    name: Run the release pipeline on the default branch
     runs-on: ubuntu-latest
 
     steps:
-      - name: Start and wait for the cache warm-up
+      - name: Start and wait for the release pipeline
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          CACHE_WARM_REQUEST_ID: warm-${{ github.run_id }}-${{ github.run_attempt }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh workflow run warm-android-gradle-cache.yml \
+          gh workflow run publish-android-release.yml \
             --repo "$REPOSITORY" \
             --ref "$DEFAULT_BRANCH" \
-            -f "request_id=$CACHE_WARM_REQUEST_ID"
+            -f "release_tag=$RELEASE_TAG"
 
           for attempt in {1..30}; do
-            warm_run_id="$(gh run list \
+            release_run_id="$(gh run list \
               --repo "$REPOSITORY" \
-              --workflow warm-android-gradle-cache.yml \
+              --workflow publish-android-release.yml \
               --branch "$DEFAULT_BRANCH" \
               --event workflow_dispatch \
               --limit 30 \
               --json databaseId,displayTitle \
-              | jq -r --arg request_id "$CACHE_WARM_REQUEST_ID" \
-                '.[] | select(.displayTitle == $request_id) | .databaseId' \
+              | jq -r --arg release_tag "$RELEASE_TAG" \
+                '.[] | select(.displayTitle == ("Build Android release for " + $release_tag)) | .databaseId' \
               | head -n 1)"
 
-            if [ -n "$warm_run_id" ]; then
-              gh run watch "$warm_run_id" --repo "$REPOSITORY" --exit-status
+            if [ -n "$release_run_id" ]; then
+              gh run watch "$release_run_id" --repo "$REPOSITORY" --exit-status
               exit $?
             fi
 
             sleep 2
           done
 
-          echo "Timed out waiting for the Gradle cache warm-up to start." >&2
+          echo "Timed out waiting for the Android release pipeline to start." >&2
           exit 1
-
-  build:
-    name: Build and publish APK
-    needs: warm_gradle_cache
-    runs-on: ubuntu-latest
-    environment: main
-    env:
-      ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-    steps:
-      - name: Check out the tag
-        uses: actions/checkout@v5
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.15.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Restore the Android signing key
-        run: |
-          for variable in \
-            ANDROID_KEYSTORE_BASE64 \
-            ANDROID_KEYSTORE_PASSWORD \
-            ANDROID_KEY_ALIAS \
-            ANDROID_KEY_PASSWORD; do
-            if [ -z "${!variable}" ]; then
-              echo "Missing GitHub Actions secret: ${variable}" >&2
-              exit 1
-            fi
-          done
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
-
-      - name: Generate the Android project
-        run: pnpm exec expo prebuild --platform android --non-interactive --no-install
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-
-      - name: Build the signed release APK
-        working-directory: android
-        run: ./gradlew app:assembleRelease --build-cache -I ../scripts/release-signing.gradle
-
-      - name: Prepare APK
-        id: apk
-        run: |
-          apk_name="Crux-${{ github.ref_name }}.apk"
-          cp android/app/build/outputs/apk/release/app-release.apk "$apk_name"
-          echo "path=$apk_name" >> "$GITHUB_OUTPUT"
-
-      - name: Store build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Crux-${{ github.ref_name }}
-          path: ${{ steps.apk.outputs.path }}
-          if-no-files-found: error
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: ${{ steps.apk.outputs.path }}
