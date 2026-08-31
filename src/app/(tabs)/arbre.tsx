@@ -60,9 +60,10 @@ function saveCollapsedTiers(collapsed: Partial<Record<DisplayTier, boolean>>) {
 export default function SkillTreeScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
-  const { search, selectExercise: selectExerciseParam } = useLocalSearchParams<{
+  const { search, selectExercise: selectExerciseParam, templateId } = useLocalSearchParams<{
     search?: string;
     selectExercise?: string;
+    templateId?: string;
   }>();
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [collapsed, setCollapsed] = useState<Partial<Record<DisplayTier, boolean>>>({});
@@ -136,6 +137,22 @@ export default function SkillTreeScreen() {
       });
   }
 
+  function returnToExerciseSearch() {
+    if (!templateId) {
+      router.back();
+      return;
+    }
+
+    router.navigate({
+      pathname: "/ajouter-exercice",
+      params: {
+        mode: "template",
+        templateId,
+        ...(treeSearch ? { search: treeSearch } : {}),
+      },
+    });
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
@@ -162,7 +179,9 @@ export default function SkillTreeScreen() {
               </Text>
             </View>
             <Pressable
-              onPress={() => (selectedProgression ? setSelectedProgressionId(null) : router.back())}
+              onPress={() =>
+                selectedProgression ? setSelectedProgressionId(null) : returnToExerciseSearch()
+              }
               accessibilityRole="button"
               accessibilityLabel={
                 selectedProgression
