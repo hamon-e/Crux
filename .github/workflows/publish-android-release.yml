@@ -66,6 +66,9 @@ jobs:
           done
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
 
+      - name: Set the app version from the release tag
+        run: node scripts/prepare-release-version.js "$RELEASE_TAG"
+
       - name: Generate the Android project
         run: pnpm exec expo prebuild --platform android --non-interactive --no-install
 
