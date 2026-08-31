@@ -40,7 +40,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,9 +61,12 @@ jobs:
       - name: Generate the Android project
         run: pnpm exec expo prebuild --platform android --non-interactive --no-install
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Build the signed release APK
         working-directory: android
-        run: ./gradlew app:assembleRelease -I ../scripts/release-signing.gradle
+        run: ./gradlew app:assembleRelease --build-cache -I ../scripts/release-signing.gradle
 
       - name: Prepare APK
         id: apk
