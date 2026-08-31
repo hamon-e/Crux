@@ -2,7 +2,7 @@
   "expo": {
     "name": "Crux",
     "slug": "test_app",
-    "version": "2.1.0",
+    "version": "2.2.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "testapp",
@@ -13,9 +13,11 @@
     },
     "android": {
       "package": "com.anonymous.test_app",
-      "versionCode": 11,
+      "versionCode": 2002001,
       "softwareKeyboardLayoutMode": "pan",
-      "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"],
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -51,7 +53,9 @@
         "expo-build-properties",
         {
           "android": {
-            "buildArchs": ["arm64-v8a"]
+            "buildArchs": [
+              "arm64-v8a"
+            ]
           }
         }
       ],
