@@ -1,7 +1,13 @@
 name: Warm Android Gradle cache
+run-name: ${{ inputs.request_id || 'Manual Android Gradle cache warm' }}
 
 on:
   workflow_dispatch:
+    inputs:
+      request_id:
+        description: Identifier for the workflow that requested this warm-up.
+        required: false
+        type: string
 
 permissions:
   contents: read
