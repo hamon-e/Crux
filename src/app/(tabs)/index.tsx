@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
+import { useBottomTabBarHeight } from "expo-router/build/react-navigation/bottom-tabs";
 import {
   BackHandler,
   KeyboardAvoidingView,
@@ -59,6 +60,7 @@ function ActiveWorkoutKeepAwake() {
 export default function SessionScreen() {
   const db = useSQLiteContext();
   const colors = useTheme();
+  const bottomTabBarHeight = useBottomTabBarHeight();
 
   const [workout, setWorkout] = useState<WorkoutDetail | null>(null);
   const [templates, setTemplates] = useState<(Template & { exercise_count: number })[]>([]);
@@ -402,9 +404,7 @@ export default function SessionScreen() {
         </View>
 
         <KeyboardStickyView
-          // Android redimensionne déjà cette vue quand le clavier s'ouvre.
-          // Le laisser se déplacer aussi le faisait remonter deux fois.
-          enabled={Platform.OS === "ios"}
+          offset={Platform.OS === "android" ? { closed: 0, opened: bottomTabBarHeight } : undefined}
           style={styles.chronoSticky}
         >
           {chronoVisible ? (
