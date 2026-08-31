@@ -14,7 +14,6 @@
     "android": {
       "package": "com.anonymous.test_app",
       "versionCode": 2002001,
-      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM"
       ],

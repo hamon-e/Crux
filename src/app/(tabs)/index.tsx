@@ -401,7 +401,12 @@ export default function SessionScreen() {
           </Pressable>
         </View>
 
-        <KeyboardStickyView style={styles.chronoSticky}>
+        <KeyboardStickyView
+          // Android redimensionne déjà cette vue quand le clavier s'ouvre.
+          // Le laisser se déplacer aussi le faisait remonter deux fois.
+          enabled={Platform.OS === "ios"}
+          style={styles.chronoSticky}
+        >
           {chronoVisible ? (
             <View style={styles.chronoBar}>
               <View style={styles.chronoTitleRow}>
