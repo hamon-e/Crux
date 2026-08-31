@@ -8,7 +8,8 @@
     "scheme": "testapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.anonymous.testapp"
     },
     "android": {
       "package": "com.anonymous.test_app",
@@ -51,6 +52,13 @@
           "android": {
             "buildArchs": ["arm64-v8a"]
           }
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.anonymous.testapp.widgets",
+          "groupIdentifier": "group.com.anonymous.testapp"
         }
       ]
     ],
