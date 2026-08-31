@@ -6,11 +6,53 @@ on:
       - "*"
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
+  warm_gradle_cache:
+    name: Warm Gradle cache on the default branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start and wait for the cache warm-up
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CACHE_WARM_REQUEST_ID: warm-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          gh workflow run warm-android-gradle-cache.yml \
+            --repo "$REPOSITORY" \
+            --ref "$DEFAULT_BRANCH" \
+            -f "request_id=$CACHE_WARM_REQUEST_ID"
+
+          for attempt in {1..30}; do
+            warm_run_id="$(gh run list \
+              --repo "$REPOSITORY" \
+              --workflow warm-android-gradle-cache.yml \
+              --branch "$DEFAULT_BRANCH" \
+              --event workflow_dispatch \
+              --limit 30 \
+              --json databaseId,displayTitle \
+              | jq -r --arg request_id "$CACHE_WARM_REQUEST_ID" \
+                '.[] | select(.displayTitle == $request_id) | .databaseId' \
+              | head -n 1)"
+
+            if [ -n "$warm_run_id" ]; then
+              gh run watch "$warm_run_id" --repo "$REPOSITORY" --exit-status
+              exit $?
+            fi
+
+            sleep 2
+          done
+
+          echo "Timed out waiting for the Gradle cache warm-up to start." >&2
+          exit 1
+
   build:
     name: Build and publish APK
+    needs: warm_gradle_cache
     runs-on: ubuntu-latest
     environment: main
     env:
