@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
@@ -137,7 +137,7 @@ export default function SkillTreeScreen() {
       });
   }
 
-  function returnToExerciseSearch() {
+  const returnToExerciseSearch = useCallback(() => {
     if (!templateId) {
       router.back();
       return;
@@ -151,7 +151,24 @@ export default function SkillTreeScreen() {
         ...(treeSearch ? { search: treeSearch } : {}),
       },
     });
-  }
+  }, [templateId, treeSearch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSelectionMode) return;
+
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (selectedProgressionId !== null) {
+          setSelectedProgressionId(null);
+        } else {
+          returnToExerciseSearch();
+        }
+        return true;
+      });
+
+      return () => subscription.remove();
+    }, [isSelectionMode, returnToExerciseSearch, selectedProgressionId]),
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
