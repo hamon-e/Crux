@@ -143,15 +143,14 @@ export default function SkillTreeScreen() {
       return;
     }
 
-    router.navigate({
+    router.dismissTo({
       pathname: "/ajouter-exercice",
       params: {
         mode: "template",
         templateId,
-        ...(treeSearch ? { search: treeSearch } : {}),
       },
     });
-  }, [templateId, treeSearch]);
+  }, [templateId]);
 
   useFocusEffect(
     useCallback(() => {
