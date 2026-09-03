@@ -1315,8 +1315,15 @@ export async function getCurrentWeekDailyVolume(db: SQLiteDatabase) {
      FROM workouts w LEFT JOIN sets s ON s.workout_id = w.id
      WHERE w.completed = 1
        AND w.name <> 'Validation manuelle'
-       AND w.date >= date('now', 'weekday 1', '-6 days')
-       AND w.date <= date('now')
+       -- Le modificateur "weekday 1" avance au lundi suivant : le jeudi,
+       -- "weekday 1", "-6 days" commencerait donc le mardi. On retire
+       -- explicitement le nombre de jours écoulés depuis lundi.
+       AND w.date >= date(
+         'now',
+         'localtime',
+         printf('-%d days', (CAST(strftime('%w', 'now', 'localtime') AS INTEGER) + 6) % 7)
+       )
+       AND w.date <= date('now', 'localtime')
      GROUP BY w.date ORDER BY w.date`,
   );
 }
