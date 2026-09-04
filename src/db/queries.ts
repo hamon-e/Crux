@@ -508,10 +508,6 @@ export async function startWorkout(
       );
       name = tpl?.name ?? "";
       color = tpl?.color ?? "";
-      const tExercises = await db.getAllAsync<TemplateExercise>(
-        "SELECT * FROM template_exercises WHERE template_id = ? ORDER BY order_index",
-        templateId,
-      );
       const result = await db.runAsync(
         `INSERT INTO workouts (name, date, started_at, completed, template_id, color)
            VALUES (?, ?, ?, 0, ?, ?)`,
@@ -522,43 +518,61 @@ export async function startWorkout(
         color,
       );
       workoutId = result.lastInsertRowId;
-      for (const [i, te] of tExercises.entries()) {
-        const tSets = await db.getAllAsync<TemplateSet>(
-          "SELECT * FROM template_sets WHERE template_exercise_id = ? ORDER BY set_index",
-          te.id,
-        );
-        if (tSets.length > 0) {
-          for (const [s, ts] of tSets.entries()) {
-            const timed = te.set_type === "time";
-            await db.runAsync(
-              `INSERT INTO sets (workout_id, exercise_id, weight, reps, duration, set_order, side)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              workoutId,
-              te.exercise_id,
-              timed ? 0 : (ts.target_weight ?? 0),
-              timed ? 0 : ts.target_reps,
-              timed ? (ts.target_seconds ?? 0) : null,
-              i * 100 + s,
-              te.side ?? null,
-            );
-          }
-        } else {
-          const timed = te.set_type === "time";
-          for (let s = 0; s < te.target_sets; s++) {
-            await db.runAsync(
-              `INSERT INTO sets (workout_id, exercise_id, weight, reps, duration, set_order, side)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              workoutId,
-              te.exercise_id,
-              timed ? 0 : (te.target_weight ?? 0),
-              timed ? 0 : te.target_reps,
-              timed ? (te.target_seconds ?? 0) : null,
-              i * 100 + s,
-              te.side ?? null,
-            );
-          }
-        }
-      }
+      // Copie toute la routine côté SQLite. L'ancienne boucle faisait une lecture
+      // puis une écriture asynchrone par série, soit des dizaines d'allers-retours
+      // sur le bridge natif pour une routine un peu longue.
+      await db.runAsync(
+        `WITH RECURSIVE
+           ordered_exercises AS (
+             SELECT te.*,
+                    ROW_NUMBER() OVER (ORDER BY te.order_index, te.id) - 1 AS exercise_position
+             FROM template_exercises te
+             WHERE te.template_id = ?
+           ),
+           legacy_sets (
+             template_exercise_id, set_position, target_reps, target_weight, target_seconds
+           ) AS (
+             SELECT oe.id, 0, oe.target_reps, oe.target_weight, oe.target_seconds
+             FROM ordered_exercises oe
+             WHERE oe.target_sets > 0
+               AND NOT EXISTS (
+                 SELECT 1 FROM template_sets ts WHERE ts.template_exercise_id = oe.id
+               )
+             UNION ALL
+             SELECT ls.template_exercise_id, ls.set_position + 1,
+                    ls.target_reps, ls.target_weight, ls.target_seconds
+             FROM legacy_sets ls
+             JOIN ordered_exercises oe ON oe.id = ls.template_exercise_id
+             WHERE ls.set_position + 1 < oe.target_sets
+           ),
+           routine_sets AS (
+             SELECT oe.exercise_id, oe.set_type, oe.side, oe.exercise_position,
+                    ts.target_reps, ts.target_weight, ts.target_seconds,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY oe.id ORDER BY ts.set_index, ts.id
+                    ) - 1 AS set_position
+             FROM ordered_exercises oe
+             JOIN template_sets ts ON ts.template_exercise_id = oe.id
+             UNION ALL
+             SELECT oe.exercise_id, oe.set_type, oe.side, oe.exercise_position,
+                    ls.target_reps, ls.target_weight, ls.target_seconds, ls.set_position
+             FROM ordered_exercises oe
+             JOIN legacy_sets ls ON ls.template_exercise_id = oe.id
+           )
+         INSERT INTO sets (
+           workout_id, exercise_id, weight, reps, duration, set_order, side
+         )
+         SELECT ?, exercise_id,
+                CASE WHEN set_type = 'time' THEN 0 ELSE COALESCE(target_weight, 0) END,
+                CASE WHEN set_type = 'time' THEN 0 ELSE target_reps END,
+                CASE WHEN set_type = 'time' THEN COALESCE(target_seconds, 0) ELSE NULL END,
+                exercise_position * 100 + set_position,
+                side
+         FROM routine_sets
+         ORDER BY exercise_position, set_position`,
+        templateId,
+        workoutId,
+      );
     } else {
       const result = await db.runAsync(
         "INSERT INTO workouts (name, date, started_at, completed) VALUES (?, ?, ?, 0)",
