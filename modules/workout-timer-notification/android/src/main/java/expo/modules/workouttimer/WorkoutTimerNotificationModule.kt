@@ -68,7 +68,10 @@ class WorkoutTimerNotificationModule : Module() {
         .setLocalOnly(true)
         .setShowWhen(true)
         .setWhen(startedAt.toLong())
-        .setUsesChronometer(false)
+        // Laisser Android exposer le temps dans ses présentations compactes
+        // (barre d'état et écran verrouillé), en complément de notre vue.
+        .setUsesChronometer(true)
+        .setChronometerCountDown(false)
         .apply { contentIntent?.let(::setContentIntent) }
         .build()
 
