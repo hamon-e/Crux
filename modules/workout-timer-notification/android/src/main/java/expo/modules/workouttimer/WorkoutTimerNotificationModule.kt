@@ -6,8 +6,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.SystemClock
-import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.kotlin.modules.Module
@@ -43,35 +41,27 @@ class WorkoutTimerNotificationModule : Module() {
         "drawable",
         context.packageName
       ).takeIf { it != 0 } ?: context.applicationInfo.icon
-      val elapsedRealtime = (System.currentTimeMillis() - startedAt.toLong()).coerceAtLeast(0L)
-      val chronometerBase = SystemClock.elapsedRealtime() - elapsedRealtime
-      val contentView = RemoteViews(
-        context.packageName,
-        R.layout.workout_timer_notification
-      ).apply {
-        setTextViewText(
-          R.id.workout_timer_name,
-          workoutName.ifBlank { "Séance en cours" }
-        )
-        setChronometer(R.id.workout_timer_chronometer, chronometerBase, null, true)
-      }
-
       val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(notificationIcon)
-        .setContentTitle(workoutName.ifBlank { "Séance en cours" })
-        .setContentText("Chronomètre en cours")
-        .setCustomContentView(contentView)
-        .setCustomBigContentView(contentView)
-        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-        .setCategory("stopwatch")
+        .setContentTitle("Chronomètre")
+        .setContentText(workoutName.ifBlank { "Séance en cours" })
+        .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setOnlyAlertOnce(true)
         .setOngoing(true)
-        .setShowWhen(false)
-        .setUsesChronometer(false)
+        .setShowWhen(true)
+        .setWhen(startedAt.toLong())
+        .setUsesChronometer(true)
+        .setChronometerCountDown(false)
         .apply { contentIntent?.let(::setContentIntent) }
         .build()
+        .apply {
+          // Android 16+ peut ainsi présenter le chrono en Live Update sur
+          // l'écran verrouillé et dans la puce de la barre d'état. La clé est
+          // ignorée sans effet sur les versions antérieures.
+          extras.putBoolean("android.requestPromotedOngoing", true)
+        }
 
       NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
     }
