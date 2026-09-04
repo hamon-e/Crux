@@ -6,8 +6,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.SystemClock
-import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.kotlin.modules.Module
@@ -40,26 +38,12 @@ class WorkoutTimerNotificationModule : Module() {
           PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
       }
-      val elapsedRealtime = (System.currentTimeMillis() - startedAt.toLong()).coerceAtLeast(0L)
-      val chronometerBase = SystemClock.elapsedRealtime() - elapsedRealtime
-      val contentView = RemoteViews(
-        context.packageName,
-        R.layout.workout_timer_notification
-      ).apply {
-        setTextViewText(
-          R.id.workout_timer_name,
-          workoutName.ifBlank { "Séance en cours" }
-        )
-        setChronometer(R.id.workout_timer_chronometer, chronometerBase, null, true)
-      }
+      val displayName = workoutName.ifBlank { "Séance en cours" }
 
       val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_workout_timer)
-        .setContentTitle("Chronomètre")
-        .setContentText(workoutName.ifBlank { "Séance en cours" })
-        .setCustomContentView(contentView)
-        .setCustomBigContentView(contentView)
-        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        .setContentTitle(displayName)
+        .setContentText("Séance en cours")
         .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -68,12 +52,16 @@ class WorkoutTimerNotificationModule : Module() {
         .setLocalOnly(true)
         .setShowWhen(true)
         .setWhen(startedAt.toLong())
-        // Laisser Android exposer le temps dans ses présentations compactes
-        // (barre d'état et écran verrouillé), en complément de notre vue.
         .setUsesChronometer(true)
         .setChronometerCountDown(false)
         .apply { contentIntent?.let(::setContentIntent) }
         .build()
+        .apply {
+          // Une Live Update Android ne peut pas utiliser de RemoteViews.
+          // Le système rend ainsi le chrono avec ses couleurs et peut aussi
+          // le présenter sous forme de puce sur l'écran verrouillé.
+          extras.putBoolean("android.requestPromotedOngoing", true)
+        }
 
       NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
     }
