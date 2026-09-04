@@ -43,7 +43,6 @@ class WorkoutTimerNotificationModule : Module() {
       val notification = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_workout_timer)
         .setContentTitle(displayName)
-        .setContentText("Séance en cours")
         .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
